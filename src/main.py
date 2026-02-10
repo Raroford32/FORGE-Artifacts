@@ -164,45 +164,58 @@ def forge(target, output, log, config):
     # Your extract_then_classify implementation here
 
 
+def _detect_default_target():
+    """Same pattern as access_reports.ipynb: data is expected to already be there."""
+    for candidate in [
+        os.path.join("..", "dataset", "results"),
+        os.path.join("dataset", "results"),
+    ]:
+        if os.path.isdir(candidate):
+            return candidate
+    return None
+
+
 @cli.command()
 @click.option(
     "--target",
     "-t",
-    required=True,
+    required=False,
+    default=None,
     help=(
-        "Any FORGE-compatible input: .sol file, directory of .sol files, "
-        "FORGE JSON output, directory of FORGE JSONs (e.g. dataset/results/), "
-        "or raw audit document (.pdf/.md) for full extract->fetch->discover pipeline"
+        "FORGE JSON, directory of JSONs, .sol file/dir, or audit doc. "
+        "Defaults to dataset/results/ when available."
     ),
 )
 @click.option(
     "--output",
     "-o",
-    required=True,
-    help="Path to output directory for discovery report(s)",
+    required=False,
+    default="discovery_output",
+    help="Output directory (default: discovery_output/)",
 )
 @common_options
 def discover(target, output, log, config):
     """Generate 0-day discovery prompts and investigation guides.
 
-    Auto-detects input type and runs the appropriate pipeline:
+    Works exactly like the forge command — point at the data and run.
+    When no target is given, uses dataset/results/ automatically.
 
     \b
-      .sol file/dir      → analyze directly
-      FORGE JSON         → resolve project_path → analyze contracts
-      FORGE JSON dir     → batch process each project
-      audit doc (.pdf)   → extract → fetch → analyze (full pipeline)
-
-    The FORGE dataset (27k+ findings) is auto-detected for known
-    vulnerability correlation when available.
-
-    \b
-    Examples:
-      python main.py discover -t dataset/results/project.pdf.json -o output/
-      python main.py discover -t dataset/results/ -o output/
-      python main.py discover -t contracts/MyProtocol/ -o output/
+    Typical usage (just configure .env with API_KEY, then):
+      python main.py discover
+      python main.py discover -t dataset/results/project.pdf.json
       python main.py discover -t audit_report.pdf -o output/
     """
+    if target is None:
+        target = _detect_default_target()
+        if target is None:
+            console.print(
+                "[bold red]No target specified and dataset/results/ not found.[/bold red]\n"
+                "Provide a target with -t or ensure dataset/results/ exists."
+            )
+            return
+        console.print(f"[cyan]Auto-detected target:[/cyan] {target}")
+
     console.print(
         Panel(
             f"[bold red]0-Day Discovery Pipeline[/bold red]\n"
