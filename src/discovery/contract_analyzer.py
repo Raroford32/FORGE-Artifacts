@@ -24,6 +24,7 @@ from core.invoker import (
     invoke_contract_decompose,
     MAX_RETRIES,
     INTERVAL,
+    CONFIG,
 )
 from vendor.commentjson import commentjson
 
@@ -238,16 +239,19 @@ class ContractAnalyzer(BaseModel):
         Call the LLM for deep structural decomposition.
         Returns raw JSON string of the decomposition.
         """
-        # Truncate very large contracts to fit context window
-        enc = tiktoken.get_encoding("cl100k_base")
-        token_count = len(enc.encode(source_code))
-        if token_count > 12000:
-            logger.warning(
-                "Contract is {} tokens, truncating to ~12000 for decomposition",
-                token_count,
-            )
-            tokens = enc.encode(source_code)[:12000]
-            source_code = enc.decode(tokens)
+        # Only truncate if truly exceeding the model's context window;
+        # the configured max_contract_tokens controls this (default: no limit)
+        max_tokens = CONFIG.get("discovery", {}).get("max_contract_tokens", 0)
+        if max_tokens and max_tokens > 0:
+            enc = tiktoken.get_encoding("cl100k_base")
+            token_count = len(enc.encode(source_code))
+            if token_count > max_tokens:
+                logger.warning(
+                    "Contract is {} tokens, truncating to ~{} for decomposition",
+                    token_count, max_tokens,
+                )
+                tokens = enc.encode(source_code)[:max_tokens]
+                source_code = enc.decode(tokens)
 
         retry = 0
         while retry < MAX_RETRIES:

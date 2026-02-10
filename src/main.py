@@ -169,23 +169,39 @@ def forge(target, output, log, config):
     "--target",
     "-t",
     required=True,
-    help="Path to Solidity file, directory of .sol files, or FORGE JSON output with project_path",
+    help=(
+        "Any FORGE-compatible input: .sol file, directory of .sol files, "
+        "FORGE JSON output, directory of FORGE JSONs (e.g. dataset/results/), "
+        "or raw audit document (.pdf/.md) for full extract->fetch->discover pipeline"
+    ),
 )
 @click.option(
     "--output",
     "-o",
     required=True,
-    help="Path to output directory for discovery report",
+    help="Path to output directory for discovery report(s)",
 )
 @common_options
 def discover(target, output, log, config):
-    """Generate 0-day discovery prompts and investigation guides from smart contracts.
+    """Generate 0-day discovery prompts and investigation guides.
 
-    Analyzes Solidity source code through a multi-stage pipeline:
-    structural decomposition, attack surface mapping, novel hypothesis
-    generation, and discovery prompt synthesis. Outputs a comprehensive
-    report with self-contained prompts for LLM-driven vulnerability hunting
-    and step-by-step investigation guides for security researchers.
+    Auto-detects input type and runs the appropriate pipeline:
+
+    \b
+      .sol file/dir      → analyze directly
+      FORGE JSON         → resolve project_path → analyze contracts
+      FORGE JSON dir     → batch process each project
+      audit doc (.pdf)   → extract → fetch → analyze (full pipeline)
+
+    The FORGE dataset (27k+ findings) is auto-detected for known
+    vulnerability correlation when available.
+
+    \b
+    Examples:
+      python main.py discover -t dataset/results/project.pdf.json -o output/
+      python main.py discover -t dataset/results/ -o output/
+      python main.py discover -t contracts/MyProtocol/ -o output/
+      python main.py discover -t audit_report.pdf -o output/
     """
     console.print(
         Panel(
@@ -202,7 +218,7 @@ def discover(target, output, log, config):
     discovery_processor = DiscoveryProcessor("discover", target, output, log, config)
     discovery_processor.run()
     console.print(
-        f"[bold green]Discovery report written to {output}[/bold green]"
+        f"[bold green]Discovery report(s) written to {output}[/bold green]"
     )
 
 

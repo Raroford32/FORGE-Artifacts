@@ -45,7 +45,7 @@ fetcher:
 
 discovery:
     analysis_depth: comprehensive  # comprehensive or quick. Comprehensive runs all stages with full depth.
-    dataset_path: ""  # Path to FORGE dataset results/ directory for known vuln correlation. Leave empty to use built-in knowledge.
-    valid_ext: [".sol", ".json"]  # Accepted input file types for discovery pipeline
-    max_contract_tokens: 12000  # Max tokens per contract for LLM decomposition (larger contracts are truncated)
+    dataset_path: ""  # Path to FORGE dataset results/ directory. Leave empty for auto-detection (probes dataset/results/).
+    valid_ext: [".sol", ".json", ".pdf", ".md", ".txt"]  # All accepted input types (auto-detected)
+    max_contract_tokens: 0  # 0 = no truncation limit. Set to a positive number to cap token count per contract for LLM decomposition.
 
