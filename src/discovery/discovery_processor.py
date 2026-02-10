@@ -302,18 +302,20 @@ class DiscoveryProcessor(BaseProcessor):
             if profile.protocol_type != "unknown":
                 primary_protocol_type = profile.protocol_type
 
-        combined_profile_text = "\n\n---\n\n".join(
-            analyzer.profile_to_context(p) for p in all_profiles
-        )
+        # The LLM decomposition IS the reasoning — it carries the investigator's
+        # understanding from Phase 1. The static profile supplements it.
         combined_decomposition = "\n\n---\n\n".join(
             d for d in all_decompositions if d
+        )
+        combined_profile_text = "\n\n---\n\n".join(
+            analyzer.profile_to_context(p) for p in all_profiles
         )
 
         # Enrich with existing findings from FORGE JSON
         if findings_context:
-            combined_profile_text += "\n\n=== KNOWN FINDINGS FROM AUDIT ===\n"
+            combined_decomposition += "\n\n=== KNOWN FINDINGS FROM AUDIT ===\n"
             for f in findings_context[:30]:
-                combined_profile_text += (
+                combined_decomposition += (
                     f"- [{f.get('severity','?')}] {f.get('title','')}: "
                     f"{f.get('description','')[:300]}\n"
                 )

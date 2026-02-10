@@ -98,265 +98,128 @@ def invoke_classify(cwe_info: str, vuln_info: str):
 
 
 # ──────────────────────────────────────────────────────────────
-# Discovery Module — Value-Drain 0-Day Reasoning Engine
+# Discovery Module — Value-Drain 0-Day Investigation Engine
 #
-# Every prompt below is built on ONE axiom:
-#   "A vulnerability exists iff an unprivileged caller can construct
-#    a transaction sequence that ends with them holding more value
-#    than they started with, at the expense of the protocol or its
-#    users."
+# Each prompt below carries the investigation framework: the mission,
+# the core principles, and the stage-specific reasoning guide.
+# This creates a coherent reasoning thread across all stages —
+# the same investigator, building understanding progressively.
 #
-# There are no labels, no traditional categories, no checklists.
-# The LLM is guided to reason from first principles about VALUE
-# CONSERVATION — where it holds, and where it breaks.
+# Import the framework so prompts stay in sync with the methodology.
 # ──────────────────────────────────────────────────────────────
+from discovery.framework import (
+    MISSION,
+    SYSTEM_IDENTITY,
+    CORE_PRINCIPLES,
+    STAGE_1_GUIDE,
+    STAGE_2_GUIDE,
+    STAGE_3_GUIDE,
+    STAGE_4_GUIDE,
+    DRAINAGE_MECHANICS,
+    TRANSITION_1_TO_2,
+    TRANSITION_2_TO_3,
+    TRANSITION_3_TO_4,
+    KNOWN_VULNS_GUIDE,
+)
 
 
 @ell.simple(model=MODEL, client=CLIENT, temperature=0.3)
 def invoke_contract_decompose(source_code: str):
-    """Map the complete value lifecycle of a smart contract."""
+    """Phase 1 — Build a complete understanding of the contract's value system."""
     return [
-        ell.system(
-            "You are a first-principles reasoner about value in EVM smart contracts. "
-            "You do not think in vulnerability labels or audit checklists. "
-            "You think in terms of value: where it enters, how it is tracked, "
-            "what transforms it, what conditions release it, and where it exits. "
-            "A contract is a state machine that moves value. Your job is to map "
-            "that machine with absolute precision so every assumption about value "
-            "conservation becomes explicit."
-        ),
+        ell.system(SYSTEM_IDENTITY),
         ell.user(
-            """Decompose the following smart contract purely in terms of its VALUE LIFECYCLE.
+            f"""MISSION: {MISSION}
 
-Produce a JSON document with these sections:
+You are beginning Phase 1 of a multi-phase investigation. Read the reasoning
+framework below carefully — it will guide your thinking through this phase
+and all subsequent phases.
 
-1. **value_entry_points**
-   Every path through which value (ETH, tokens, NFTs, shares, reward credits — anything
-   with economic worth) enters this contract. For each path list:
-   - the function and its caller requirements
-   - the token/asset type
-   - how the incoming value is recorded in internal accounting
-   - whether the recorded amount equals the actual amount received (or could diverge)
+{CORE_PRINCIPLES}
 
-2. **value_exit_points**
-   Every path through which value leaves this contract. Same detail as above, plus:
-   - what conditions gate the release
-   - who decides the amount
-   - whether the amount is computed from internal accounting or actual balance
+{STAGE_1_GUIDE}
 
-3. **internal_accounting**
-   Every state variable or mapping that represents a claim on value (balances, shares,
-   debt positions, reward accumulators, allowances, etc.). For each:
-   - what value it tracks
-   - which functions increase it, which decrease it
-   - whether its sum across all holders is supposed to equal some actual balance
+Now read the source code below and build your value-lifecycle model.
+Output as structured JSON wrapped in ```json``` blocks. Include every
+observation, even those that do not fit neatly into a category — the goal
+is completeness of understanding, not conformity to a template.
 
-4. **value_transformations**
-   Every place where value is converted, exchanged, minted, burned, split, or merged.
-   For each transformation:
-   - the mathematical formula used
-   - whether rounding/truncation occurs and in whose favour
-   - what external data (prices, rates, timestamps) feeds into the calculation
-   - whether the transformation is atomic or can be interrupted mid-state
+```solidity
+{source_code}
+```
 
-5. **value_gates**
-   Every assumption, check, or condition that the code relies on to prevent unauthorized
-   value extraction. For each gate:
-   - the exact condition (code-level)
-   - what makes it true under normal operation
-   - what external or caller-controlled inputs could make it false
-   - whether the gate can be evaluated at a moment when the state is inconsistent
-     (e.g. during a callback, between two steps of a multi-step operation)
-
-6. **external_value_dependencies**
-   Every external contract call, oracle read, or off-chain data dependency that
-   influences how value moves. For each:
-   - what data is consumed and how it affects value calculations
-   - what happens if the external source returns an unexpected value, reverts,
-     or behaves differently from the code's implicit expectation
-   - whether the caller can influence the external source's return value within
-     the same transaction (or across a small number of blocks)
-
-7. **value_conservation_invariants**
-   State explicitly every equation or inequality that MUST hold for the protocol
-   to be solvent — e.g. "sum of all user shares × pricePerShare ≤ contract token
-   balance". List every invariant you can derive, even if it seems obvious.
-
-Be exhaustive. Output as a single JSON object wrapped in ```json``` blocks.
-Every missed value path is a potential drain vector.
-"""
-        ),
-        ell.user(
-            "Understood. I will map every atom of value flow with zero assumptions "
-            "and zero reliance on named vulnerability patterns."
-        ),
-        ell.user(
-            f"```solidity\n{source_code}\n```\n\nBegin value lifecycle decomposition."
+Begin Phase 1 analysis."""
         ),
     ]
 
 
 @ell.simple(model=MODEL, client=CLIENT, temperature=0.4)
 def invoke_attack_surface_mapping(contract_profile: str):
-    """Identify every point where value conservation could break."""
+    """Phase 2 — Find where value conservation breaks."""
     return [
-        ell.system(
-            "You are an adversarial reasoner. You are given a complete map of how "
-            "value flows through a smart contract. Your sole objective: find every "
-            "point where the conservation of value could be violated — where an "
-            "unprivileged caller can end a transaction sequence holding more value "
-            "than they started with. You do not use vulnerability labels. You reason "
-            "from the value map itself."
-        ),
+        ell.system(SYSTEM_IDENTITY),
         ell.user(
-            f"""Below is a complete value-lifecycle decomposition of a smart contract.
+            f"""MISSION: {MISSION}
 
-Your task: enumerate every DRAIN SURFACE — a concrete mechanism by which an
-unprivileged external caller could extract net positive value from this contract.
+{TRANSITION_1_TO_2}
 
-For each drain surface, provide:
+You are now in Phase 2. Read the reasoning framework and the Phase 1 output
+below, then conduct your adversarial analysis.
 
-**a) The value path**
-   Which entry points, transformations, and exit points are involved?
-   Trace the exact flow: caller puts in X of asset A, interacts with the contract,
-   and extracts Y of asset B where value(Y) > value(X).
+{CORE_PRINCIPLES}
 
-**b) The broken assumption**
-   Which specific value gate or conservation invariant fails? Why?
-   What must be true for the gate to hold, and how does the caller make it false?
+{STAGE_2_GUIDE}
 
-**c) The manipulation vector**
-   What does the caller control that lets them break the assumption?
-   Consider: call ordering, intermediate callbacks, external contract behavior,
-   flash-borrowed capital, block timing, price source influence, governance weight,
-   contract deployment, or any combination thereof.
+Below is the complete Phase 1 output — the value-lifecycle decomposition of
+the contract under investigation. This is YOUR understanding from the
+previous phase. Build on it.
 
-**d) The state window**
-   Is there a moment during execution when internal accounting is inconsistent
-   with actual balances? When the code has updated one variable but not yet
-   another? When an external call is in flight and the caller gets control back?
-   Describe the exact state window and what the caller can do inside it.
-
-**e) The extraction sequence**
-   Write the step-by-step transaction sequence (or multi-tx sequence) that
-   the caller executes. Be concrete:
-   - Tx 1: call X with parameters ...
-   - During callback / in next block: call Y ...
-   - Final state: caller gained Z tokens net
-
-**f) Scale of extraction**
-   Is this a single-shot drain, a repeated small leak, or an escalating
-   feedback loop? What bounds the extraction (if anything)?
-
-Think about the contract as a black box that transforms inputs to outputs.
-The attacker's goal is simple: arrange inputs so outputs exceed inputs.
-Do not label anything with traditional names. Describe the MECHANICS.
-
-Output as a JSON array of drain surfaces, each with the fields above.
-Wrap in ```json``` blocks.
-
-Contract value decomposition:
 {contract_profile}
-"""
+
+Output drain surfaces as a JSON array wrapped in ```json``` blocks. For each
+drain surface include: value_path, broken_invariant, manipulation_vector,
+state_window, extraction_sequence, scale.
+
+Begin Phase 2 analysis."""
         ),
-        ell.user(
-            "I will systematically examine every value transition and find where "
-            "conservation breaks. Pure mechanics, no labels."
-        ),
-        ell.user("Begin drain surface enumeration."),
     ]
 
 
 @ell.simple(model=MODEL, client=CLIENT, temperature=0.5)
 def invoke_hypothesis_generation(contract_profile: str, attack_surfaces: str, known_vulns_context: str):
-    """Construct concrete value-extraction sequences from first principles."""
+    """Phase 3 — Construct concrete attack hypotheses."""
     return [
-        ell.system(
-            "You are a constructive adversary. Given a value map and a list of "
-            "potential drain surfaces for a smart contract, your job is to build "
-            "CONCRETE attack hypotheses — specific transaction sequences where "
-            "an unprivileged caller ends with more value than they started. "
-            "You think from first principles about how value conservation can "
-            "fail. You do not reference named vulnerability classes. You do not "
-            "produce checklists. Every hypothesis is a specific, mechanistic "
-            "story about value flowing from the protocol to the attacker."
-        ),
+        ell.system(SYSTEM_IDENTITY),
         ell.user(
-            f"""You have two inputs:
+            f"""MISSION: {MISSION}
 
-1. A value-lifecycle decomposition of a smart contract
-2. A list of drain surfaces where value conservation may break
+{TRANSITION_2_TO_3}
 
-Additionally, here is context about how value has been drained from
-similar contracts in the real world — described purely in terms of
-mechanics, not labels:
+You are now in Phase 3. You have the value-lifecycle model (Phase 1) and the
+drain surfaces (Phase 2). Your task is to construct complete attack hypotheses.
+
+{CORE_PRINCIPLES}
+
+{STAGE_3_GUIDE}
+
+Additionally, here is context about how value has been drained from real-world
+contracts — described as mechanics, not labels. Use this to build intuition,
+not to pattern-match:
+
 {known_vulns_context}
 
-Your task: for each drain surface (and for any NEW drain vector you
-identify by combining surfaces), construct a COMPLETE ATTACK HYPOTHESIS.
-
-Each hypothesis must answer ONE question:
-  "How does an unprivileged caller end a transaction sequence holding
-   more value than they started with?"
-
-For each hypothesis provide:
-
-1. **title**: A short description of the value-drain mechanic (not a
-   vulnerability label — describe what happens to the value).
-
-2. **value_flow_break**: Which specific conservation invariant breaks?
-   Write the invariant as a mathematical statement and show how the
-   attack violates it.
-
-3. **attack_sequence**: Numbered steps. Each step is a concrete
-   transaction or operation:
-   - Who calls what function with what arguments
-   - What state changes occur
-   - What external calls fire and what happens during them
-   - What value moves where at each step
-
-4. **initial_state**: What must be true before the attack starts?
-   (e.g. contract holds ≥N tokens, a certain pool exists, etc.)
-
-5. **caller_requirements**: What does the attacker need?
-   (only: capital, deployed contracts, timing — NOT privileges)
-
-6. **net_extraction**: What does the attacker gain and what does the
-   protocol/users lose? Be specific about amounts in terms of the
-   contract's variables.
-
-7. **why_it_works**: A plain-English explanation of WHY the code fails
-   to prevent this. What did the developers assume that is actually
-   false? What state transition did they not foresee?
-
-8. **amplification**: Can this be repeated? Does each iteration
-   amplify the next? What bounds the total extraction?
-
-9. **verification_plan**: Concrete steps to confirm or refute this
-   hypothesis:
-   - Specific Foundry/Hardhat test to write
-   - Exact values to use in the test
-   - What assertion proves the drain
-
-Generate at least 10 hypotheses, ordered by net extraction magnitude.
-Every hypothesis must be mechanistically complete — someone reading it
-should be able to write the exploit code directly.
-
-Output as a JSON array wrapped in ```json``` blocks.
-
-Contract value decomposition:
+=== PHASE 1 OUTPUT (Value Lifecycle) ===
 {contract_profile}
 
-Drain surfaces:
+=== PHASE 2 OUTPUT (Drain Surfaces) ===
 {attack_surfaces}
-"""
+
+Output hypotheses as a JSON array wrapped in ```json``` blocks. Each hypothesis
+must include: title, value_flow_break, attack_sequence, initial_state,
+caller_requirements, net_extraction, why_it_works, amplification, verification_plan.
+
+Begin Phase 3 analysis."""
         ),
-        ell.user(
-            "I will construct complete, mechanistic attack sequences — each one "
-            "a precise story of value leaving the protocol and entering the "
-            "attacker's wallet."
-        ),
-        ell.user("Begin hypothesis construction."),
     ]
 
 
@@ -367,151 +230,60 @@ def invoke_discovery_prompt_synthesis(
     hypotheses: str,
     protocol_type: str,
 ):
-    """Synthesize self-contained investigation prompts from the complete analysis."""
+    """Phase 4 — Synthesize self-contained investigation prompts."""
     return [
-        ell.system(
-            "You are a precision instrument builder. Your job is to take a complete "
-            "value-drain analysis of a smart contract and distill it into a set of "
-            "self-contained investigation prompts. Each prompt will be handed to an "
-            "analyst (human or LLM) who has never seen this contract. The prompt must "
-            "contain everything they need to investigate one specific value-drainage "
-            "opportunity — the relevant code, the exact question, the verification "
-            "steps. No labels, no generic checklists. Every prompt is about one "
-            "concrete question: can value be drained through THIS specific mechanism?"
-        ),
+        ell.system(SYSTEM_IDENTITY),
         ell.user(
-            f"""You are given:
-- A value-lifecycle decomposition
-- A list of drain surfaces
-- A set of attack hypotheses
+            f"""MISSION: {MISSION}
 
-Transform this analysis into SELF-CONTAINED INVESTIGATION PROMPTS.
+{TRANSITION_3_TO_4}
 
-Each prompt targets ONE value-drainage opportunity and must include:
+You are now in Phase 4 — the final phase. You have the complete investigation:
+value lifecycle (Phase 1), drain surfaces (Phase 2), and attack hypotheses
+(Phase 3). Transform everything into self-contained investigation prompts.
 
-1. **id**: Unique numeric identifier.
+{STAGE_4_GUIDE}
 
-2. **title**: What value-flow is under investigation (describe the mechanic,
-   not a vulnerability label).
-
-3. **system_context**: A system prompt that sets up the investigator's
-   mindset. Always frame it as: "You are investigating whether [specific
-   value-flow mechanic] allows an unprivileged caller to extract net
-   positive value."
-
-4. **analysis_prompt**: The full investigation prompt. This must contain:
-   - The relevant source code snippets (inline, not referenced)
-   - The specific value-conservation invariant being tested
-   - The hypothesized break mechanic
-   - Concrete questions to answer (can X happen? what if Y?)
-   - Numerical examples to check
-   - Edge cases to consider
-
-5. **focus_areas**: 2-4 specific things to look at (described as value-flow
-   mechanics, not vulnerability names).
-
-6. **contract_context**: The exact code snippets relevant to this
-   investigation (extracted from the analysis).
-
-7. **investigation_guide**: Step-by-step instructions to verify:
-   - What test to write (Foundry/Hardhat)
-   - What initial state to set up
-   - What transaction sequence to execute
-   - What assertion proves/disproves the drain
-   - How to measure the net value extraction
-
-Also produce an **investigation_roadmap** — an ordered list of which
-prompts to investigate first (by expected severity of drain) and how
-findings from one investigation feed into the next.
-
-The prompts must work STANDALONE. An analyst receiving one prompt has
-everything needed to conduct a complete investigation of that specific
-value-drainage vector.
-
-Output as JSON with two keys:
-  "discovery_prompts": [array of prompt objects]
-  "investigation_roadmap": [array of ordered steps with rationale]
-
-Wrap in ```json``` blocks.
-
-Value decomposition:
+=== PHASE 1 OUTPUT (Value Lifecycle) ===
 {contract_profile}
 
-Drain surfaces:
+=== PHASE 2 OUTPUT (Drain Surfaces) ===
 {attack_surfaces}
 
-Attack hypotheses:
+=== PHASE 3 OUTPUT (Attack Hypotheses) ===
 {hypotheses}
-"""
+
+Output as JSON with two keys: "discovery_prompts" (array of prompt objects)
+and "investigation_roadmap" (array of ordered investigation steps with
+rationale). Wrap in ```json``` blocks.
+
+Begin Phase 4 synthesis."""
         ),
-        ell.user(
-            "I will produce precision investigation instruments — each one a "
-            "complete, self-contained probe into a specific value-drainage path."
-        ),
-        ell.user("Begin prompt synthesis."),
     ]
 
 
 @ell.simple(model=MODEL, client=CLIENT, temperature=0.3)
 def invoke_known_vulns_synthesis(dataset_context: str, protocol_type: str):
-    """Extract value-drainage mechanics from historical findings."""
+    """Process historical vulnerability data into value-drainage mechanics."""
     return [
-        ell.system(
-            "You are a historian of value drainage in smart contracts. You study "
-            "past exploits and audit findings NOT to build checklists, but to "
-            "understand the fundamental MECHANICS of how value conservation was "
-            "broken. You describe each case purely in terms of what value moved "
-            "where and why the code failed to prevent it. No vulnerability labels. "
-            "No categories. Just mechanics."
-        ),
+        ell.system(SYSTEM_IDENTITY),
         ell.user(
-            f"""Below is data from real-world audit reports and exploits.
+            f"""MISSION: {MISSION}
 
-Extract the VALUE-DRAINAGE MECHANICS — not a list of vulnerability types,
-but a set of mechanical descriptions of how value left the protocol and
-entered an attacker's control.
+You are processing historical data to build a knowledge foundation for the
+investigation. This is NOT a categorization exercise. You are extracting
+the MECHANICS of value drainage — the physics of how money has actually
+left smart contracts in the real world.
 
-For each mechanic you identify, describe:
+{KNOWN_VULNS_GUIDE}
 
-1. **What value moved**: tokens, ETH, shares, debt, collateral — what
-   specific economic value was extracted?
+Here is data from real-world audit reports. Process it according to the
+framework above. Focus on findings relevant to: {protocol_type}
 
-2. **How the code's model diverged from reality**: Every drain happens
-   because the code believes something that is not true. What was the
-   false belief? (e.g. "the code believed the balance had not changed
-   since the last checkpoint" or "the code assumed the price feed
-   reflected the true market price at the time of settlement")
-
-3. **What the attacker controlled**: What input, timing, or external
-   state did the attacker manipulate to make the false belief exploitable?
-
-4. **The extraction sequence**: In mechanical terms, what happened?
-   (e.g. "Caller deposited, triggered a callback during which they
-   withdrew, then the original deposit completed against a stale
-   balance record")
-
-5. **Why the gate failed**: What check or condition was supposed to
-   prevent this, and why did it not work?
-
-Organize by MECHANIC, not by label. Group cases where the same
-fundamental conservation break occurred even if they have different
-traditional names.
-
-This output will be used to reason about NEW mechanics that have NOT
-been seen before. The goal is to build intuition about HOW value
-conservation breaks, so we can predict where it will break next.
-
-Dataset context:
 {dataset_context}
 
-Target protocol context: {protocol_type}
-
-Output as structured plain text organized by drainage mechanic.
-"""
+Output as structured plain text organized by drainage mechanic — not by
+vulnerability label. Group cases where the same conservation break occurred
+even if they have different traditional names."""
         ),
-        ell.user(
-            "I will extract the mechanics of value drainage — the physics of "
-            "how money escapes smart contracts — not a taxonomy of labels."
-        ),
-        ell.user("Begin mechanical analysis."),
     ]
