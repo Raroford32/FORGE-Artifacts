@@ -1,17 +1,19 @@
 """
-Discovery Processor - 0-day vulnerability prompt/guide generation.
+Discovery Processor — Adaptive investigation guidebook generation.
 
-Follows the exact same pattern as BuildProcessor:
+Follows the BaseProcessor contract:
   - BaseProcessor.run() walks directories, calls _parse_file + _process per file
   - _parse_file reads a FORGE JSON, resolves project_path → .sol source code
-  - _process chains all stages with progressive export after each
+  - _process runs the Adaptive Investigation Engine:
+      Understand → Generate → Evaluate → Refine → (loop) → Guidebook
 
-Input: FORGE JSON files (dataset/results/) — same output the forge pipeline produces
-Output: DiscoveryReport JSON with prompts, guides, and investigation roadmaps
+Input: FORGE JSON files (dataset/results/), .sol files, or audit docs
+Output: InvestigationGuidebook JSON — self-validated investigation methodology
 
-Usage (mirrors the original forge command):
-  python main.py discover -t dataset/results/ -o discovery_output/
-  python main.py discover -t dataset/results/project.pdf.json -o discovery_output/
+Usage:
+  python main.py discover                              # auto-detect dataset
+  python main.py discover -t path/to/contract.sol      # single contract
+  python main.py discover -t dataset/results/           # full dataset
 """
 
 import os
@@ -22,13 +24,12 @@ from typing import List, Dict, Optional, Tuple
 from loguru import logger
 from pydantic import BaseModel
 
-from core.models import DiscoveryReport, ContractProfile
+from core.models import InvestigationGuidebook, ContractProfile
 from core.base import BaseProcessor
 from core.invoker import CONFIG, CHUNK_LENGTH
 
 from discovery.contract_analyzer import ContractAnalyzer
-from discovery.vulnerability_hypothesizer import VulnerabilityHypothesizer
-from discovery.prompt_generator import PromptGenerator
+from discovery.agents import AdaptiveEngine
 from discovery.dataset_index import DatasetIndex
 
 
@@ -111,15 +112,15 @@ class DiscoveryProcessor(BaseProcessor):
     """
     Follows the exact BaseProcessor contract:
       _initialize() → sets valid_ext, loads dataset index
-      _parse_file(filepath) → reads one FORGE JSON, returns resolved data
-      _process(input) → chains all discovery stages, progressive export
+      _parse_file(filepath) → reads one input file, returns resolved data
+      _process(input) → runs Adaptive Investigation Engine
 
     BaseProcessor.run() handles directory walking, history, and file validation.
     """
 
     def _initialize(self) -> bool:
         """
-        Same pattern as BuildProcessor._initialize and ExtractProcessor._initialize:
+        Same pattern as BuildProcessor._initialize:
         set valid_ext from config so BaseProcessor.run() knows which files to process.
         Also pre-build the dataset knowledge index (once, shared across all files).
         """
@@ -130,8 +131,7 @@ class DiscoveryProcessor(BaseProcessor):
         os.makedirs(self.output, exist_ok=True)
         os.makedirs(self.log_dir, exist_ok=True)
 
-        # Build the dataset knowledge index once — same data the original
-        # system already produced, now used as knowledge base
+        # Build the dataset knowledge index once
         dataset_path = CONFIG.get("discovery", {}).get("dataset_path", "")
         if not dataset_path:
             dataset_path = _auto_detect_dataset_path()
@@ -153,8 +153,7 @@ class DiscoveryProcessor(BaseProcessor):
 
     def _parse_file(self, filepath: str) -> Optional[dict]:
         """
-        Same pattern as BuildProcessor._parse_file:
-        reads one input file, returns data for _process().
+        Reads one input file, returns data for _process().
 
         For FORGE JSONs: resolves project_path to .sol source code.
         For .sol files: reads directly.
@@ -268,16 +267,15 @@ class DiscoveryProcessor(BaseProcessor):
             "project_info": dataclasses.asdict(report.project_info),
         }
 
-    def _process(self, input_data: dict) -> Optional[DiscoveryReport]:
+    def _process(self, input_data: dict) -> Optional[InvestigationGuidebook]:
         """
-        Main pipeline — mirrors BuildProcessor._process pattern:
-        chain stages sequentially, progressive export after each.
+        Run the Adaptive Investigation Engine.
 
-        Stages:
-          1. Contract decomposition
-          2. Attack surface mapping + hypothesis generation
-          3. Discovery prompt synthesis
-          4. Report assembly
+        The engine handles everything internally:
+          Understand → Generate → Evaluate → Refine → (loop) → Guidebook
+
+        No fixed stages. The engine adapts depth and focus based on
+        what it discovers in the source code.
         """
         source_files = input_data.get("source_files", [])
         findings_context = input_data.get("findings_context", [])
@@ -285,135 +283,64 @@ class DiscoveryProcessor(BaseProcessor):
         if not source_files:
             return None
 
-        analyzer = ContractAnalyzer()
-
-        # ── Stage 1: Structural decomposition ──
-        logger.info("STAGE 1/4: Structural decomposition ({} files)", len(source_files))
-        all_profiles = []
-        all_decompositions = []
+        # Combine source files
         combined_source = ""
         primary_protocol_type = "unknown"
 
+        analyzer = ContractAnalyzer()
         for filepath, source_code in source_files:
-            profile, decomposition = analyzer.analyze_file(filepath)
-            all_profiles.append(profile)
-            all_decompositions.append(decomposition)
             combined_source += f"\n// === {os.path.basename(filepath)} ===\n{source_code}\n"
-            if profile.protocol_type != "unknown":
-                primary_protocol_type = profile.protocol_type
+            # Quick protocol type detection (static, no LLM needed)
+            detected = analyzer._classify_protocol_type(source_code)
+            if detected != "unknown":
+                primary_protocol_type = detected
 
-        # The LLM decomposition IS the reasoning — it carries the investigator's
-        # understanding from Phase 1. The static profile supplements it.
-        combined_decomposition = "\n\n---\n\n".join(
-            d for d in all_decompositions if d
-        )
-        combined_profile_text = "\n\n---\n\n".join(
-            analyzer.profile_to_context(p) for p in all_profiles
+        logger.info(
+            "Processing {} source files ({} chars), protocol type: {}",
+            len(source_files), len(combined_source), primary_protocol_type,
         )
 
-        # Enrich with existing findings from FORGE JSON
-        if findings_context:
-            combined_decomposition += "\n\n=== KNOWN FINDINGS FROM AUDIT ===\n"
-            for f in findings_context[:30]:
-                combined_decomposition += (
-                    f"- [{f.get('severity','?')}] {f.get('title','')}: "
-                    f"{f.get('description','')[:300]}\n"
-                )
-
-        profile_dicts = []
-        for p in all_profiles:
-            pd = dataclasses.asdict(p)
-            pd.pop("raw_source", None)
-            profile_dicts.append(pd)
-
-        # Progressive export after stage 1
-        partial_report = DiscoveryReport(
-            target_path=self.filepath,
-            contract_profiles=profile_dicts,
-        )
-        self.export_result(partial_report, filename=self.file_name, output_dir=self.output, overwrite=True)
-
-        logger.info("Protocol type: {}. Decomposition complete.", primary_protocol_type)
-
-        # ── Stage 2: Attack surfaces + hypotheses ──
-        logger.info("STAGE 2/4: Attack surface mapping & hypothesis generation")
-
-        # Use the full dataset index instead of random sampling
+        # Get dataset grounding context
         dataset_context = self._dataset_index.get_context_for_protocol(primary_protocol_type)
 
-        hypothesizer = VulnerabilityHypothesizer(dataset_path="")
-        hyp_result = hypothesizer.generate_hypotheses(
-            contract_profile_text=combined_profile_text,
-            decomposition_raw=combined_decomposition,
-            protocol_type=primary_protocol_type,
-            source_code=combined_source,
-            known_vulns_override=dataset_context,
+        # Build and run the adaptive engine
+        engine = AdaptiveEngine(
+            max_iterations=CONFIG.get("discovery", {}).get("max_iterations", 3),
+            quality_threshold=CONFIG.get("discovery", {}).get("quality_threshold", 0.7),
         )
 
-        attack_surfaces = hyp_result.get("attack_surfaces", "")
-        hypotheses = hyp_result.get("hypotheses", "")
-        known_vulns_context = hyp_result.get("known_vulns_context", "")
+        def _export_progressive(guidebook: InvestigationGuidebook):
+            """Progressive export callback — saves partial results to disk."""
+            self.export_result(
+                guidebook,
+                filename=self.file_name,
+                output_dir=self.output,
+                overwrite=True,
+            )
 
-        # Progressive export after stage 2
-        partial_report.attack_surfaces = self._safe_parse_list(attack_surfaces)
-        partial_report.vulnerability_hypotheses = self._safe_parse_list(hypotheses)
-        partial_report.meta_analysis = known_vulns_context
-        self.export_result(partial_report, filename=self.file_name, output_dir=self.output, overwrite=True)
-
-        logger.info("Attack surfaces mapped. Hypotheses generated.")
-
-        # ── Stage 3: Prompt synthesis ──
-        logger.info("STAGE 3/4: Discovery prompt synthesis")
-
-        generator = PromptGenerator()
-        prompts_result = generator.generate(
-            contract_profile_text=combined_profile_text,
-            attack_surfaces=attack_surfaces,
-            hypotheses=hypotheses,
-            protocol_type=primary_protocol_type,
+        guidebook = engine.run(
             source_code=combined_source,
-        )
-
-        # ── Stage 4: Final report ──
-        logger.info("STAGE 4/4: Report assembly")
-
-        report = generator.build_report(
+            dataset_context=dataset_context,
+            findings_context=findings_context,
+            protocol_type=primary_protocol_type,
             target_path=self.filepath,
-            contract_profiles=profile_dicts,
-            attack_surfaces_raw=attack_surfaces,
-            hypotheses_raw=hypotheses,
-            prompts_result=prompts_result,
-            known_vulns_context=known_vulns_context,
+            export_callback=_export_progressive,
         )
 
         # Final export
-        self.export_result(report, filename=self.file_name, output_dir=self.output, overwrite=True)
+        self.export_result(
+            guidebook,
+            filename=self.file_name,
+            output_dir=self.output,
+            overwrite=True,
+        )
 
         logger.info(
-            "Done: {} prompts, {} hypotheses",
-            len(report.discovery_prompts),
-            len(report.vulnerability_hypotheses),
+            "Done: {} prompts, {} guides, quality={:.2f}, {} iterations",
+            len(guidebook.investigation_prompts),
+            len(guidebook.reasoning_guides),
+            guidebook.final_quality_score,
+            guidebook.iterations_to_converge,
         )
-        return report
 
-    @staticmethod
-    def _safe_parse_list(raw: str) -> List[Dict]:
-        """Parse raw LLM output into a list of dicts."""
-        if not raw:
-            return []
-        import re
-        pattern = re.compile(r"```(?:json\s+)?([\[{].*?[\]}])```", re.DOTALL)
-        match = pattern.search(raw)
-        if match:
-            try:
-                parsed = json.loads(match.group(1))
-                if isinstance(parsed, list):
-                    return parsed
-                if isinstance(parsed, dict):
-                    for v in parsed.values():
-                        if isinstance(v, list):
-                            return v
-                    return [parsed]
-            except Exception:
-                pass
-        return [{"raw_analysis": raw}]
+        return guidebook

@@ -218,7 +218,7 @@ def discover(target, output, log, config):
 
     console.print(
         Panel(
-            f"[bold red]0-Day Discovery Pipeline[/bold red]\n"
+            f"[bold red]Adaptive Investigation Engine[/bold red]\n"
             f"Target: {target}\n"
             f"Output: {output}",
             border_style="red",
@@ -226,12 +226,15 @@ def discover(target, output, log, config):
         )
     )
     console.print(
-        "[yellow]Stages: Decompose -> Attack Surface -> Hypothesize -> Synthesize Prompts[/yellow]"
+        "[yellow]Engine: Understand → Generate → Evaluate → Refine → (loop) → Guidebook[/yellow]"
+    )
+    console.print(
+        "[dim]Self-evolving: methodology is self-evaluated and refined until quality threshold is met[/dim]"
     )
     discovery_processor = DiscoveryProcessor("discover", target, output, log, config)
     discovery_processor.run()
     console.print(
-        f"[bold green]Discovery report(s) written to {output}[/bold green]"
+        f"[bold green]Investigation guidebook(s) written to {output}[/bold green]"
     )
 
 

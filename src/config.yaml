@@ -48,4 +48,6 @@ discovery:
     dataset_path: ""  # Path to FORGE dataset results/ directory. Leave empty for auto-detection (probes dataset/results/).
     valid_ext: [".sol", ".json", ".pdf", ".md", ".txt"]  # All accepted input types (auto-detected)
     max_contract_tokens: 0  # 0 = no truncation limit. Set to a positive number to cap token count per contract for LLM decomposition.
+    max_iterations: 3  # Max self-evaluation refinement iterations (adaptive engine auto-scales: 1=shallow, 2=moderate, 3=deep)
+    quality_threshold: 0.7  # Minimum quality score (0.0-1.0) before the engine stops refining. Higher = more iterations.
 

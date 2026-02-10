@@ -243,3 +243,45 @@ class DiscoveryReport(BaseModel):
     discovery_prompts: List[Dict] = Field(default_factory=list)
     meta_analysis: str = ""
     investigation_roadmap: List[str] = Field(default_factory=list)
+    guidebook: Optional[Dict] = None
+
+
+# ──────────────────────────────────────────────
+# Adaptive Investigation Engine Models
+# ──────────────────────────────────────────────
+
+
+class EvaluationResult(BaseModel):
+    """Self-evaluation of investigation methodology quality."""
+    quality_score: float = 0.0
+    coverage_gaps: List[str] = Field(default_factory=list)
+    depth_issues: List[str] = Field(default_factory=list)
+    grounding_failures: List[str] = Field(default_factory=list)
+    strengths: List[str] = Field(default_factory=list)
+    recommendation: str = ""  # "converge" or "refine"
+    iteration: int = 0
+
+
+class InvestigationGuidebook(BaseModel):
+    """
+    Final self-validated investigation guidebook.
+
+    This is the primary output of the Adaptive Investigation Engine.
+    It contains investigation methodology (prompts + guides) that has
+    been self-evaluated and refined until it meets quality standards.
+    """
+    target_path: str = ""
+    protocol_type: str = ""
+    # The actual methodology
+    investigation_prompts: List[Dict] = Field(default_factory=list)
+    reasoning_guides: List[Dict] = Field(default_factory=list)
+    # Proof of self-validation
+    evaluation_history: List[Dict] = Field(default_factory=list)
+    final_quality_score: float = 0.0
+    iterations_to_converge: int = 0
+    # Grounding evidence
+    source_code_hash: str = ""
+    dataset_findings_used: int = 0
+    # Raw reasoning chain (for transparency)
+    understanding: str = ""
+    methodology_evolution: List[str] = Field(default_factory=list)

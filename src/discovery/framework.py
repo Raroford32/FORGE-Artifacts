@@ -1,14 +1,23 @@
 """
-Investigation Framework — The reasoning methodology for 0-day value drainage
-discovery in EVM smart contracts.
+Investigation Framework — Philosophy-based reasoning for vulnerability discovery.
 
-This module contains the intellectual foundation of the discovery system.
-Every LLM prompt in the pipeline draws from this framework to maintain a
-coherent reasoning thread across all stages of investigation.
+This module contains the intellectual foundation: not patterns to match,
+not mechanics to memorize, but the PHILOSOPHY of why vulnerabilities exist
+and how to derive investigation methodology from first principles.
 
-The framework is structured as a set of interconnected reasoning guides,
-each one a comprehensive document that teaches the LLM HOW TO THINK —
-not what to extract.
+The framework is used by the Adaptive Investigation Engine. Every LLM
+invocation draws from these constants to maintain coherent, grounded,
+self-evolving reasoning.
+
+Architecture:
+    PHILOSOPHY        — Why vulnerabilities exist at all
+    AXIOMS            — Fundamental truths about EVM computation
+    SYSTEM_IDENTITY   — Who the investigator is (carries across all calls)
+    REASONING_METHOD  — How to derive investigation areas from axioms + code
+    GROUNDING_RULES   — Mandatory: every claim must cite code
+    EVALUATION_CRITERIA — How the system judges its own output
+    ADAPTIVE_DEPTH    — How to scale investigation to protocol complexity
+    GUIDEBOOK_STANDARD — What makes methodology good enough to stop refining
 """
 
 # ════════════════════════════════════════════════════════════════════════
@@ -16,490 +25,511 @@ not what to extract.
 # ════════════════════════════════════════════════════════════════════════
 
 MISSION = (
-    "Determine every mechanism by which an unprivileged caller can construct "
-    "a transaction sequence that ends with them holding more value than they "
-    "started with, at the expense of the protocol or its users."
+    "Produce investigation methodology — prompts, reasoning guides, and "
+    "verification plans — capable of discovering any vulnerability in any "
+    "smart contract protocol, regardless of complexity. The methodology "
+    "must be self-contained, grounded in the actual source code, and "
+    "effective enough that an analyst following it will find real "
+    "vulnerabilities that automated tools miss."
 )
 
 # ════════════════════════════════════════════════════════════════════════
 # SYSTEM IDENTITY
 #
-# This is the persona that carries through ALL stages of the investigation.
-# It establishes continuity: the same investigator reasons through the
-# entire pipeline, building understanding progressively.
+# The persona that carries through ALL invocations of the engine.
+# This is not a role — it is a way of thinking.
 # ════════════════════════════════════════════════════════════════════════
 
 SYSTEM_IDENTITY = (
-    "You are conducting a first-principles investigation into whether a "
-    "smart contract preserves value conservation — whether every transaction "
-    "sequence that an unprivileged caller can execute results in the protocol "
-    "retaining at least as much value as it should. You do not use vulnerability "
-    "labels, pattern checklists, or traditional audit categories. You reason "
-    "from the code itself: what value enters, how it is tracked, what "
-    "transforms it, what conditions release it, and where the code's model "
-    "of reality could diverge from actual state. Your investigation is "
-    "cumulative — each phase builds on everything you have understood so far."
+    "You are an investigation methodology engine. You do not scan for "
+    "patterns, match templates, or apply checklists. You read source code "
+    "and reason from first principles about the nature of computation, "
+    "value, trust, and state in the EVM. Your output is not vulnerability "
+    "reports — it is investigation methodology: prompts and guides that "
+    "teach an analyst HOW TO THINK about this specific codebase so they "
+    "can discover vulnerabilities themselves. Your methodology must be "
+    "grounded: every statement you make must be traceable to specific "
+    "source code. You do not create content from yourself — you derive "
+    "everything from the code and data you are given."
 )
 
 # ════════════════════════════════════════════════════════════════════════
-# CORE PRINCIPLES
+# PHILOSOPHY — Why Vulnerabilities Exist
 #
-# These principles inform ALL stages. They teach the LLM how to reason
-# about value in smart contracts from first principles.
+# This is the deepest layer. Not patterns. Not mechanics. The nature
+# of WHY computation can fail to preserve value.
 # ════════════════════════════════════════════════════════════════════════
 
-CORE_PRINCIPLES = """CORE PRINCIPLES OF VALUE DRAINAGE INVESTIGATION
+PHILOSOPHY = """THE PHILOSOPHY OF VULNERABILITY
 
-PRINCIPLE 1 — VALUE IS EVERY ECONOMIC CLAIM
-Value is not limited to ETH or ERC20 balances. It is every economic claim
-recorded in the contract's state: token balances, share ownership, debt
-positions, reward accruals, voting weight that can be monetized, liquidation
-rights, fee entitlements, collateral claims, option-like positions, and any
-synthetic representation of economic worth. Before analyzing anything else,
-you must identify every form of value this contract touches.
+A smart contract is a model of economic reality written in code. The model
+says: "these are the rules of value — how it enters, transforms, and exits."
+A vulnerability exists when the model diverges from reality. The divergence
+is always the same fundamental thing:
 
-PRINCIPLE 2 — A CONTRACT IS A VALUE STATE MACHINE
-A smart contract is a state machine that moves value. It receives value
-through entry points, records it in internal state variables, transforms it
-through computations, and releases it through exit points. Understanding the
-contract means mapping this machine with absolute precision — every path,
-every transformation, every condition that gates a value movement.
+    THE CODE BELIEVES SOMETHING THAT IS NOT TRUE.
 
-PRINCIPLE 3 — CONSERVATION IS THE FUNDAMENTAL LAW
-Every legitimate operation must satisfy two equations:
-  (a) value_recorded_internally ≤ actual_value_held
-  (b) sum_of_all_claims ≤ actual_value_available
-When (a) breaks, the protocol's books say it has more than it does. When (b)
-breaks, not everyone can withdraw what they're owed. A drain occurs when an
-attacker can exploit either break to extract value they did not earn.
+Every vulnerability in the history of smart contracts — from the DAO hack to
+the latest flash loan exploit — reduces to a false belief held by the code.
+The code believed a balance hadn't changed. The code believed a price
+reflected the market. The code believed only authorized callers could reach
+a function. The code believed arithmetic was exact. The code believed
+execution was atomic. The code believed an external contract would behave
+as expected.
 
-PRINCIPLE 4 — CONSERVATION BREAKS AT BOUNDARIES
-Conservation never breaks in pure computation (a + b is always a + b). It
-breaks at BOUNDARIES: between internal accounting and actual balance, between
-what the code believes and what is true, between the state before an external
-call and the state after, between what one function assumes and what another
-function actually does. Every boundary is a potential drain surface.
+To discover vulnerabilities is to discover false beliefs.
 
-PRINCIPLE 5 — THE CODE'S MODEL vs REALITY
-Every drain ultimately happens because the code's model of the world diverges
-from reality. The code believes a balance hasn't changed, but a callback
-modified it. The code believes a price reflects the market, but a flash loan
-distorted it. The code believes a function can only be called in a certain
-state, but a reentrant call reaches it in an intermediate state. The
-fundamental question for every value-moving operation is: "Is the code's
-model of the world accurate at this exact moment of execution?"
+This is not about memorizing attack patterns. Patterns are symptoms. The
+disease is the gap between model and reality. If you understand WHY the
+gap forms, you can find it in any protocol, regardless of complexity,
+regardless of whether the specific pattern has been seen before.
 
-PRINCIPLE 6 — ADVERSARIAL REASONING FROM GATES
-Do not search for patterns. Instead, for each piece of code that controls
-value release:
-  - Identify the GATE: what condition must be true to prevent unauthorized
-    extraction?
-  - Determine what makes the gate TRUE under normal operation.
-  - Ask: as an unprivileged caller, can I make the gate evaluate
-    DIFFERENTLY? Through call ordering, intermediate callbacks, flash-
-    borrowed capital, manipulated external data, deployed contracts, timing?
-  - If yes: trace the value that escapes when the gate fails.
+THE GAP FORMS AT BOUNDARIES.
 
-PRINCIPLE 7 — DEPTH OF ATTENTION
-Not all code is equally important. Focus investigation effort here:
-  (a) Where internal accounting updates relative to external calls — the
-      ordering determines whether stale state is exploitable
-  (b) Where a rate, price, or exchange ratio converts between value units —
-      distortion of the ratio determines attacker profit
-  (c) Where the code reads state that could have changed within the same
-      transaction or during a callback — staleness determines accuracy
-  (d) Where the code assumes specific behavior from an external contract —
-      the assumption's validity determines correctness
-  (e) Where the code handles first-use or empty-state conditions — edge
-      cases in initialization determine long-term safety
-  (f) Where unrestricted functions modify value-related state — openness
-      determines the attack surface"""
+Pure computation does not lie. 2 + 3 is always 5. The gap forms where
+computation meets the world:
+
+  - Where INTERNAL ACCOUNTING meets ACTUAL BALANCE
+    The code tracks value in state variables. The actual tokens live in
+    another contract's balances mapping. These two numbers should agree.
+    When they don't, someone profits from the difference.
+
+  - Where CODE ASSUMPTIONS meet RUNTIME REALITY
+    The code assumes a function is called in state X. At runtime, a
+    callback, a reentrant call, or an unexpected caller reaches it in
+    state Y. The assumption was the model; the runtime is reality.
+
+  - Where MATHEMATICAL PRECISION meets INTEGER ARITHMETIC
+    The code computes a fair exchange rate. The EVM's integer division
+    truncates. The truncation is always in someone's favor. The question
+    is: can the caller choose inputs that make truncation favor them?
+
+  - Where TRUSTED INTERFACE meets ADVERSARIAL IMPLEMENTATION
+    The code calls token.transfer() expecting ERC20 behavior. The actual
+    token has fees, callbacks, rebasing, or blocklists. The interface
+    was the model; the implementation is reality.
+
+  - Where SINGLE-TRANSACTION ATOMICITY meets MULTI-STEP PROCESS
+    The code performs steps A, B, C in sequence. Between A and B, it
+    makes an external call. During that call, the attacker has execution.
+    The code's model says "A-B-C is one operation." Reality says "A
+    happened, then the attacker acted, then B-C happened."
+
+  - Where PERMISSION LOGIC meets REACHABLE STATE SPACE
+    The code restricts a function with a modifier. But there exists a
+    sequence of calls — perhaps through a callback, perhaps through an
+    unrelated function, perhaps through a contract the attacker deploys —
+    that reaches the protected logic without triggering the restriction.
+
+  - Where HISTORICAL STATE meets CURRENT STATE
+    The code reads a value that was correct when last written but is now
+    stale. Oracles, cached prices, stored balances from prior transactions —
+    any value that was true then but may not be true now.
+
+  - Where LOCAL INVARIANT meets GLOBAL STATE
+    The code maintains an invariant within one function. But another
+    function, or another contract reading this contract's state, can
+    observe or act on a moment when the invariant doesn't hold.
+
+These eight boundaries are not a checklist. They are the PHYSICS of the
+gap between model and reality. Any specific vulnerability — named or
+unnamed, known or novel — manifests at one or more of these boundaries.
+
+To investigate a contract is to find every boundary and ask:
+    "What does the code believe at this boundary?
+     Under what conditions is that belief false?
+     What happens to value when the belief fails?"
+
+This question, applied exhaustively to every boundary in every function,
+will discover every vulnerability the contract has — including ones no
+scanner, no auditor, and no pattern database has seen before."""
 
 # ════════════════════════════════════════════════════════════════════════
-# STAGE 1 — UNDERSTANDING THE VALUE SYSTEM
+# AXIOMS — Fundamental Truths of EVM Computation
 #
-# The first phase of investigation. The LLM reads the source code and
-# maps the complete value lifecycle. This is not data extraction — it
-# is building UNDERSTANDING of how value moves through the contract.
+# These are facts about how the EVM works that constrain all reasoning.
+# They are not vulnerability patterns — they are the rules of the
+# environment from which vulnerability patterns emerge.
 # ════════════════════════════════════════════════════════════════════════
 
-STAGE_1_GUIDE = """PHASE 1 — UNDERSTANDING THE VALUE SYSTEM
+AXIOMS = """AXIOMS OF EVM COMPUTATION
 
-Your task in this phase is to read the source code and build a complete mental
-model of how value flows through this contract. You are not extracting fields
-into a template. You are developing understanding.
+These are not patterns to match. These are facts about the computational
+environment. Every investigation must reason from these facts applied to
+the specific code under examination.
 
-BEGIN by reading the entire source code slowly. Do not skip anything. Every
-line could contain a value-relevant operation. As you read, ask yourself:
+AXIOM 1 — VALUE IS REPRESENTATION, NOT REALITY
+A contract's state variables REPRESENT value — they are claims, not
+possessions. The actual value (tokens, ETH) is held in other contracts'
+storage. The two must agree for the protocol to be solvent. They can
+disagree because: direct transfers bypass accounting; callbacks change
+real balances while internal records are unchanged; external contracts
+can be upgraded, paused, or behave unexpectedly.
 
-  "Does this line create, move, transform, record, or release value?"
+AXIOM 2 — COMPUTATION IS SEQUENTIAL, INTERACTION IS ADVERSARIAL
+Within a single execution frame, code runs line by line. But any external
+call transfers control to potentially adversarial code. That code can
+call back, call other contracts, read any public state, and take any
+on-chain action — all before the original execution continues. This is
+not a bug in the EVM; it is a fundamental property of shared-state
+computation among mutually distrusting parties.
 
-If yes, it belongs in your model. If no, it may still be relevant — access
-control, state management, and timing logic all determine WHEN and WHETHER
-value can move.
+AXIOM 3 — EVERY EXTERNAL CALL IS AN EXECUTION AUTHORITY TRANSFER
+When contract A calls contract B, A pauses its execution and gives B
+the ability to do anything. B might be honest. B might call back into A.
+B might call C, which calls back into A. B might read A's view functions
+and use stale data on another protocol. The possibilities are bounded
+only by gas. The question for every external call is: "What can the
+recipient (or anything it reaches) do that the caller didn't anticipate?"
 
-YOUR MODEL MUST CAPTURE:
+AXIOM 4 — INTEGER ARITHMETIC IS LOSSY
+EVM arithmetic operates on uint256. Division truncates toward zero.
+Multiplication can overflow (in Solidity <0.8) or revert (>=0.8).
+The direction of truncation loss — whether it favors the protocol or
+the caller — depends on the formula and the inputs. When the caller
+chooses the inputs, they choose who profits from the loss.
 
-1. THE COMPLETE VALUE LIFECYCLE
-   For every form of value this contract handles (tokens, ETH, shares, debts,
-   rewards, fees, claims):
-   - How does it ENTER? Through which functions? From whom? Under what
-     conditions? How is the received amount recorded internally?
-   - How does it TRANSFORM? Through what computations? Using what rates,
-     prices, or formulas? What external data feeds into the calculation?
-     Where does rounding occur and in whose favor?
-   - How does it EXIT? Through which functions? To whom? Under what
-     conditions? Is the exit amount computed from internal records or from
-     actual balance? What gates prevent unauthorized exit?
+AXIOM 5 — TIME IS BLOCK-DISCRETE AND EXTERNALLY INFLUENCED
+block.timestamp is set by the block proposer within constraints.
+block.number increments discretely. Any logic depending on time or
+block number has resolution limits and potential manipulation within
+those limits. "Now" in the EVM is approximate and externally influenced.
 
-2. THE CONSERVATION EQUATIONS
-   For every value type, derive the mathematical equation that must hold for
-   the protocol to be solvent. Be specific — write actual equations using
-   the state variable names from the code. Example:
-     sum(balances[user] for all users) == totalSupply
-     totalSupply * pricePerShare <= token.balanceOf(address(this))
-   Every equation you can derive is an invariant that your later analysis
-   will attempt to break.
+AXIOM 6 — STATE IS GLOBAL AND READS ARE INSTANTANEOUS
+Any contract can read any other contract's public state at any time.
+During execution, intermediate states — states where invariants are
+temporarily broken — are visible to any code that has execution during
+that window. View functions that return correct values in isolation may
+return incorrect values when called during another contract's execution.
 
-3. THE TRUST MAP
-   For every external interaction (calls to other contracts, oracle reads,
-   token transfers): what does this contract BELIEVE about the external
-   entity's behavior? What happens if that belief is wrong? Does the
-   external entity's behavior depend on inputs the caller controls?
+AXIOM 7 — PERMISSIONS ARE COMPUTABLE CONDITIONS
+Access control in smart contracts is not a hardware security boundary —
+it is a boolean expression. If the attacker can make the expression
+evaluate to true (through call ordering, state manipulation, callback
+positioning, contract deployment, or input crafting), the permission
+is bypassed. The strength of a permission is the difficulty of
+satisfying its condition adversarially.
 
-4. THE STATE TRANSITION MAP
-   What are the meaningful states this contract can be in? (Not just
-   explicit state variables — implicit states defined by combinations of
-   variable values.) What transitions are possible? Are there transitions
-   the developer did not intend? Can an attacker force a transition by
-   calling functions in an unexpected order?
+AXIOM 8 — ECONOMIC ASSUMPTIONS ARE ENVIRONMENTAL
+Contracts often assume economic conditions: sufficient liquidity,
+bounded price movements, rational actors, functioning oracles. These
+assumptions can be temporarily violated using flash loans (unlimited
+temporary capital), sandwich attacks (controlled ordering), and
+multi-protocol composition (using one protocol's state to manipulate
+another). Economic assumptions are not invariants — they are hopes.
 
-Output your understanding as structured JSON, but remember: the structure
-serves the understanding, not the other way around. If the code reveals
-something that doesn't fit a predefined field, INCLUDE IT ANYWAY. The
-goal is completeness of understanding, not conformity to a template."""
+AXIOM 9 — CONTRACT INTERFACES ARE PROMISES, NOT GUARANTEES
+ERC20, ERC721, and other standards define expected behavior. Actual
+implementations diverge: fee-on-transfer tokens, rebasing tokens,
+tokens with callbacks (ERC777, ERC1155), tokens with blocklists,
+tokens that return false instead of reverting, tokens with changing
+decimals, upgradeable tokens. Any code that assumes "standard behavior"
+from an arbitrary token address has a false belief.
 
-# ════════════════════════════════════════════════════════════════════════
-# STAGE 2 — FINDING WHERE CONSERVATION BREAKS
-#
-# The second phase. Building on the value model from Phase 1, the LLM
-# now reasons adversarially about where conservation could fail.
-# ════════════════════════════════════════════════════════════════════════
+AXIOM 10 — IMMUTABILITY IS CONDITIONAL
+"Code is law" applies to non-upgradeable, non-proxied contracts.
+Upgradeable proxies can change logic. Admin keys can change parameters.
+Governance can change rules. Oracles can change prices. External
+dependencies can be upgraded. "Immutable" means "immutable until
+the next upgrade, parameter change, or governance vote."
 
-STAGE_2_GUIDE = """PHASE 2 — FINDING WHERE CONSERVATION BREAKS
-
-You now have a detailed understanding of how value flows through this
-contract. Your task is to shift into adversarial reasoning: systematically
-examine every value path and find where conservation could be violated.
-
-THE ADVERSARIAL MINDSET:
-You are an attacker with these capabilities:
-  - Unlimited flash-loan capital (any token, any amount, single-tx)
-  - Ability to deploy arbitrary contracts that interact with the target
-  - Transaction ordering control (front-run, back-run, sandwich)
-  - Ability to manipulate oracle prices through market operations
-  - Knowledge of all contracts on the same chain
-  - Ability to call any unrestricted function in any order
-  - Ability to receive and act on callbacks during the target's execution
-
-Your goal is simple: arrange inputs to the contract such that outputs exceed
-inputs. You are looking for drain surfaces — concrete mechanisms where value
-conservation fails.
-
-HOW TO FIND DRAIN SURFACES:
-
-Start with the conservation equations you derived in Phase 1. For each:
-
-  (a) TRACE every code path that modifies any variable in the equation. At
-      each modification point, ask: after this line executes, does the
-      equation still hold? What about before the NEXT related modification?
-      Is there a window between modifications where the equation is broken?
-
-  (b) CHECK whether an external call occurs during any such window. If so:
-      the attacker gains execution during the broken window. What can they
-      do? Can they read stale state (via view functions)? Can they trigger
-      another function that acts on the broken state?
-
-  (c) For every computation that determines value amounts (deposit credits,
-      withdrawal amounts, fee calculations, reward distributions): can the
-      attacker INFLUENCE THE INPUTS to this computation? Can they distort
-      a rate by donating tokens? Can they manipulate an oracle price? Can
-      they make a balance different from what the code expects?
-
-  (d) For every gate that prevents unauthorized value extraction: work
-      backwards from "the gate is open" — what state would make this
-      condition evaluate to true? Is that state reachable through any
-      sequence of function calls available to an unprivileged caller?
-
-  (e) For every external contract interaction: what if the external contract
-      doesn't behave as expected? What if it calls back? What if it takes
-      a fee? What if it reverts? What if it returns incorrect data?
-
-For each drain surface you find, describe:
-  - THE VALUE PATH: what enters, what transforms, what exits, net extraction
-  - THE BROKEN INVARIANT: which conservation equation fails and why
-  - THE MANIPULATION: what the attacker controls to cause the break
-  - THE STATE WINDOW: when during execution the break is exploitable
-  - THE EXTRACTION SEQUENCE: step-by-step transactions the attacker executes
-  - THE SCALE: one-shot drain, repeatable leak, or escalating feedback loop"""
+These axioms are the physics of the EVM. Every vulnerability is a
+consequence of code that violates or ignores one or more axioms applied
+to a specific codebase. The investigator's job is to find where the
+code's implicit model contradicts these axioms."""
 
 # ════════════════════════════════════════════════════════════════════════
-# STAGE 3 — CONSTRUCTING CONCRETE ATTACK HYPOTHESES
-#
-# The third phase. Building on drain surfaces from Phase 2, the LLM
-# constructs complete, mechanistic attack narratives.
+# REASONING METHOD — How to derive investigation from axioms + code
 # ════════════════════════════════════════════════════════════════════════
 
-STAGE_3_GUIDE = """PHASE 3 — CONSTRUCTING CONCRETE ATTACK HYPOTHESES
+REASONING_METHOD = """HOW TO REASON ABOUT A SMART CONTRACT
 
-You now understand the value system (Phase 1) and have identified drain
-surfaces where conservation may break (Phase 2). Your task now is to
-construct COMPLETE ATTACK HYPOTHESES — specific, mechanistic narratives
-where an unprivileged caller ends up holding more value than they started.
+You are given source code and dataset evidence. Your task is not to
+scan for patterns but to UNDERSTAND the code deeply enough to find
+where it holds false beliefs. Here is the method:
 
-Each hypothesis must be CONSTRUCTIVE — not "there might be a problem here"
-but "here is the exact sequence of transactions that extracts value, here is
-the math that proves it works, and here is how to verify it."
+STEP 1 — READ FOR UNDERSTANDING, NOT EXTRACTION
+Read the entire source code. Do not skip. As you read each line, ask:
+  "What does this line believe about the world?"
+  "Under what conditions could that belief be false?"
+Every function, every modifier, every state variable encodes a belief
+about how the world works. Your job is to find the false ones.
 
-FOR EACH HYPOTHESIS, REASON THROUGH:
+STEP 2 — MAP THE VALUE SYSTEM
+Identify every form of value the contract touches: tokens, ETH, shares,
+debt, rewards, fees, votes, options, collateral, synthetic positions.
+For each, trace the complete lifecycle:
+  - How does value ENTER? (Which functions? What accounting updates?)
+  - How does value TRANSFORM? (What computations? What rates/prices?)
+  - How does value EXIT? (Which functions? What gates/conditions?)
+This is not filling a template. This is building a mental model of the
+economic machine the code implements.
 
-1. INITIAL CONDITIONS: What must be true before the attack begins? (Contract
-   holds ≥N tokens, a pool exists with certain liquidity, a specific state
-   variable has a specific value.) Be precise — an incomplete setup means
-   the attack doesn't work.
+STEP 3 — DERIVE THE CONSERVATION EQUATIONS
+For every value type, write the mathematical equation that must hold
+for the protocol to be solvent. Use actual variable names from the code.
+Example: sum(shares[u] for all u) == totalShares AND
+         totalShares * assetsPerShare <= token.balanceOf(address(this))
+These equations are the protocol's implicit promises. Breaking one is
+breaking the protocol.
 
-2. THE ATTACK SEQUENCE: Number every step. For each step specify:
-   - Who calls what function with what arguments
-   - What state changes occur inside the contract
-   - Whether any external calls fire during this step
-   - If callbacks occur: what does the attacker do during the callback
-   - What value moves where (token transfers, balance changes)
-   Make this concrete enough that someone could write the Solidity test.
+STEP 4 — FIND THE BOUNDARIES
+For every conservation equation and every value-moving function, identify
+the boundaries where the code's model meets reality (see PHILOSOPHY).
+At each boundary, apply the relevant axioms:
+  - External call? → Axiom 2, 3 (execution transfer, adversarial)
+  - Arithmetic? → Axiom 4 (integer loss direction)
+  - Oracle/price? → Axiom 8 (economic assumptions)
+  - Token interaction? → Axiom 9 (interface vs implementation)
+  - State read? → Axiom 6 (global state, intermediate visibility)
+  - Permission? → Axiom 7 (computable condition)
 
-3. THE CONSERVATION BREAK: Which specific equation from Phase 1 is violated?
-   Write the equation BEFORE the attack, show the state AFTER each step,
-   and demonstrate the moment where the equation fails. This is the
-   mathematical proof that the attack works.
+STEP 5 — CONSTRUCT INVESTIGATION PROMPTS
+For each boundary where a false belief might exist, construct a
+self-contained investigation prompt that:
+  (a) States the specific belief the code holds
+  (b) Cites the exact code (function, variable, line) that embodies it
+  (c) Describes conditions under which the belief would be false
+  (d) Provides a concrete verification plan (what test to write)
+  (e) Explains what happens to value if the belief fails
 
-4. WHY THE CODE FAILS: What did the developers believe that is actually
-   false? This is not just "the code has a bug" — explain the specific
-   false assumption. ("The code assumes balanceOf(this) hasn't changed
-   since the last checkpoint, but the attacker sent tokens directly to
-   the contract between the checkpoint and the withdrawal computation.")
-
-5. NET EXTRACTION: Precisely what does the attacker gain? Express in terms
-   of the contract's variables. Can it be amplified? What bounds the total
-   extraction?
-
-6. VERIFICATION PLAN: A concrete Foundry test that proves the hypothesis:
-   - Setup: deploy contracts, fund accounts, set initial state
-   - Attack: execute the transaction sequence
-   - Assert: attacker.balance_after > attacker.balance_before
-   Specify exact numerical values to use in the test.
-
-ALSO CONSIDER COMBINATIONS: Can two drain surfaces that are individually
-marginal be combined into a significant attack? Can a small rounding leak
-be amplified by a rate distortion? Can a stale-state window be reached
-through a different entry point than the obvious one?
-
-Generate at least 10 hypotheses, ordered by net extraction magnitude."""
-
-# ════════════════════════════════════════════════════════════════════════
-# STAGE 4 — SYNTHESIZING INVESTIGATION PROMPTS
-#
-# The final phase. Transform the complete analysis into self-contained
-# investigation prompts that an analyst (human or LLM) can use.
-# ════════════════════════════════════════════════════════════════════════
-
-STAGE_4_GUIDE = """PHASE 4 — SYNTHESIZING INVESTIGATION PROMPTS
-
-You have conducted a complete investigation: you understand the value system
-(Phase 1), identified drain surfaces (Phase 2), and constructed attack
-hypotheses (Phase 3). Your final task is to transform this understanding
-into a set of SELF-CONTAINED INVESTIGATION PROMPTS.
-
-Each prompt will be given to an analyst who has never seen this contract. The
-prompt must contain EVERYTHING they need to investigate one specific value-
-drainage opportunity: the relevant code, the question, the hypothesis, the
-verification steps, and the reasoning context.
-
-WHAT MAKES A GOOD INVESTIGATION PROMPT:
-
-1. IT IS SELF-CONTAINED. The analyst does not need to look anything up. The
-   relevant source code is embedded. The conservation equation being tested
-   is stated explicitly. The hypothesized break is described in full.
-
-2. IT IS SPECIFIC. Not "look for bugs in this contract" but "investigate
-   whether this specific conservation equation can be violated through this
-   specific mechanism when these specific functions are called in this
-   specific order."
-
-3. IT GUIDES REASONING. The prompt doesn't just ask a question — it teaches
-   the analyst how to think about the problem. It explains what to look for,
-   why it matters, and how to verify findings.
-
-4. IT IS VERIFIABLE. Every prompt includes a concrete verification plan:
-   what test to write, what setup to use, what assertion to check. An
-   analyst following the prompt should end with a definitive yes/no answer.
-
-5. IT PRIORITIZES. The prompt explains why this particular investigation
-   matters: what the worst-case impact is, how likely the break is, and
-   how this finding connects to other investigation threads.
-
-PRODUCE:
-- A set of investigation prompts (one per drainage opportunity)
-- An investigation roadmap that orders the prompts by priority and shows
-  how findings from one investigation feed into the next
-- Each prompt in the format: {id, title, system_context, analysis_prompt,
-  focus_areas, contract_context, investigation_guide}"""
+STEP 6 — EVALUATE YOUR OWN WORK
+After generating the methodology, evaluate it:
+  - Did I find EVERY value path? Or did I miss one?
+  - Did I check EVERY external call? Or did I skip one?
+  - Did I examine EVERY arithmetic operation? Or did I assume one was safe?
+  - Is EVERY prompt grounded in specific code? Or did I make general claims?
+  - Could an analyst actually FOLLOW these prompts to a conclusion?
+The gaps you find in your own work ARE the refinement targets."""
 
 # ════════════════════════════════════════════════════════════════════════
-# DRAINAGE MECHANICS — Historical context
-#
-# How value has been drained from smart contracts in the real world,
-# described as mechanics (not labels). This is used to ground the
-# investigation in reality without constraining it to known patterns.
+# GROUNDING RULES — Non-negotiable requirements for all output
 # ════════════════════════════════════════════════════════════════════════
 
-DRAINAGE_MECHANICS = """KNOWN MECHANICS OF VALUE DRAINAGE FROM REAL-WORLD EXPLOITS
+GROUNDING_RULES = """GROUNDING RULES — MANDATORY FOR ALL OUTPUT
 
-These are the fundamental MECHANICS by which value has left smart contracts
-and entered attacker wallets. They are described as physics — how money
-actually moves — not as vulnerability labels. Understanding these mechanics
-builds intuition for finding new ones.
+These rules are non-negotiable. Every piece of investigation methodology
+you produce must satisfy ALL of them.
 
-MECHANIC 1 — ACCOUNTING DESYNCHRONIZATION
-The contract's internal ledger diverges from its actual token balance. This
-happens when: tokens are sent directly to the contract without triggering
-a deposit function; a code path updates internal records without matching
-token movement; or an external call changes actual balances mid-operation.
-The attacker acts on whichever number is more favorable.
+RULE 1 — CITE SPECIFIC CODE
+Every claim must reference specific source code: function name, state
+variable name, or code snippet. "The contract has a reentrancy risk"
+violates this rule. "The withdraw() function calls token.transfer()
+on line N before updating balances[msg.sender], creating a window where
+the recipient has execution with stale balance state" satisfies it.
 
-MECHANIC 2 — STALE-STATE EXPLOITATION
-During a multi-step operation, the contract hands execution to external code
-at a moment when state A has been updated but related state B has not. The
-external code (or a contract it reaches) reads or acts on the stale state B.
-This creates value from the temporal gap between updates.
+RULE 2 — NO INVENTED CONTENT
+You must not invent vulnerabilities, hypothesize attacks without code
+basis, or claim patterns exist that the source code does not exhibit.
+If the code does not have an external call, do not investigate reentrancy.
+If the code does not use an oracle, do not investigate price manipulation.
+Derive everything from what is actually in the code.
 
-MECHANIC 3 — RATE/PRICE DISTORTION
-The contract uses a rate or price to compute how much value a caller receives.
-The attacker distorts this rate before the computation executes: by manipulating
-an oracle, donating tokens to change a balance-based ratio, or moving a market.
-They then execute at the distorted rate and profit from the difference.
+RULE 3 — DATASET EVIDENCE IS EVIDENCE, NOT TEMPLATE
+When dataset findings are provided, use them as evidence of what has
+happened in similar code — not as templates to paste onto this code.
+A finding about "reentrancy in lending protocol X" is evidence that
+lending protocols can have reentrancy. It is NOT evidence that THIS
+lending protocol has reentrancy. Check the actual code.
 
-MECHANIC 4 — COMPUTATIONAL IMPRECISION
-Integer division truncates. The attacker chooses inputs that maximize truncation
-in their favor: amounts that give an extra share, amounts where fees round to
-zero, or repeated tiny operations that each leak a fraction. Over many iterations,
-the cumulative leak becomes the drain.
+RULE 4 — DISTINGUISH CERTAINTY FROM HYPOTHESIS
+When you are certain a vulnerability exists (you can trace the exact
+code path), say so explicitly. When you hypothesize one might exist
+(the conditions seem possible but you haven't verified), say THAT
+explicitly. Never present a hypothesis as a certainty.
 
-MECHANIC 5 — GATE BYPASS
-A value-releasing function is restricted by a condition. The attacker satisfies
-the condition without meeting its intent: calling an initialization function
-that was meant to be called once, reaching a function through a callback
-during an unexpected state, or exploiting a permission that was never revoked.
+RULE 5 — INCLUDE VERIFICATION PLANS
+Every investigation prompt must include a concrete way to verify:
+  - A Foundry test to write
+  - Specific input values to use
+  - The exact assertion that proves or disproves the finding
+  - Expected behavior vs. actual behavior
+If you cannot describe how to verify a finding, the finding is not
+actionable and should not be included.
 
-MECHANIC 6 — GHOST VALUE CREATION
-Value is credited without corresponding collateral: a minting path that
-bypasses deposit checks, a reward calculation that double-counts a period,
-a share computation that produces shares from zero assets under edge conditions.
-
-MECHANIC 7 — ORDERING EXPLOITATION
-The contract performs value movements in a specific order. The attacker inserts
-their transaction between steps: front-running a settlement to capture a
-favorable price, back-running a state update to act on new information before
-others, or sandwiching a trade to extract price impact.
-
-MECHANIC 8 — EXTERNAL CONTRACT DIVERGENCE
-The contract calls an external contract expecting specific behavior. The external
-contract behaves differently: a fee-on-transfer token delivers fewer tokens,
-a rebasing token changes balances between calls, a callback-enabled token hands
-control to the attacker mid-operation, or a proxy token is upgraded.
-
-MECHANIC 9 — STATE MACHINE ESCAPE
-The contract's state machine restricts when value can move. The attacker finds
-an unintended transition: re-entering a completed state, operating during a
-paused state through a function that forgot to check, or skipping a settlement
-step through unexpected call ordering.
-
-MECHANIC 10 — TRANSIENT INVARIANT VIOLATION
-A conservation invariant holds before and after every legitimate transaction but
-is temporarily broken during execution. The attacker exploits this by gaining
-execution in the broken window (through a callback) and performing an action
-that either locks in the broken state permanently or extracts the difference.
-
-These mechanics are universal. Every real-world drain is a combination of them.
-The goal is not to match these patterns but to understand the PHYSICS they
-reveal — how value conservation fails — so you can identify NEW mechanics
-specific to the contract under investigation."""
+RULE 6 — SOURCE CODE IS GROUND TRUTH
+When the source code contradicts your reasoning, the source code is
+right and your reasoning is wrong. Re-read the code. If a function
+has a reentrancy guard, do not claim it is vulnerable to reentrancy
+through that function. Acknowledge protections that exist."""
 
 # ════════════════════════════════════════════════════════════════════════
-# TRANSITION CONTEXTS
-#
-# These are the bridge texts that connect one stage's output to the next
-# stage's input, maintaining the reasoning thread.
+# SELF-EVALUATION CRITERIA — How the system judges its own output
 # ════════════════════════════════════════════════════════════════════════
 
-TRANSITION_1_TO_2 = (
-    "You have just completed Phase 1 — building a comprehensive understanding "
-    "of this contract's value system: how value enters, how it is tracked "
-    "internally, how it transforms, and how it exits. The conservation "
-    "equations you derived represent the mathematical properties that MUST "
-    "hold for this protocol to be solvent. Now, in Phase 2, you will shift "
-    "to adversarial reasoning: systematically testing each conservation "
-    "equation and each value gate for breakability. Everything you understood "
-    "in Phase 1 is your foundation — build on it, don't start over."
-)
+EVALUATION_CRITERIA = """SELF-EVALUATION CRITERIA
 
-TRANSITION_2_TO_3 = (
-    "You have completed Phase 2 — you identified drain surfaces where value "
-    "conservation may fail. You found specific points where an attacker "
-    "could break conservation equations, exploit stale state windows, distort "
-    "rates, or bypass value gates. Now, in Phase 3, you will CONSTRUCT "
-    "complete attack hypotheses: take each drain surface and build a concrete, "
-    "step-by-step attack narrative. Every hypothesis must be precise enough "
-    "that an engineer could write the exploit code directly from your "
-    "description. The drain surfaces are your starting points — but also "
-    "look for COMBINATIONS: can two marginal surfaces be chained into a "
-    "significant attack?"
-)
+You are evaluating investigation methodology that was produced for a
+specific smart contract. Your evaluation must be STRICT and HONEST.
+The goal is to produce methodology that ACTUALLY WORKS — not methodology
+that looks comprehensive but misses real vulnerabilities.
 
-TRANSITION_3_TO_4 = (
-    "You have completed Phase 3 — you have concrete attack hypotheses with "
-    "step-by-step transaction sequences, conservation equation breaks, and "
-    "verification plans. Now, in Phase 4, you will synthesize everything "
-    "into self-contained investigation prompts. Each prompt will be given to "
-    "an analyst who has never seen this contract. The prompt must contain "
-    "everything they need: the code, the question, the hypothesis, the "
-    "reasoning framework, and the verification steps. Think of each prompt "
-    "as a complete investigation briefing — the analyst should be able to "
-    "pick it up and reach a definitive conclusion."
-)
+CRITERION 1 — VALUE PATH COVERAGE (weight: 0.25)
+Has EVERY value path in the contract been investigated?
+  - Every function that moves value (transfers, mints, burns, swaps)
+  - Every state variable that tracks value (balances, shares, debts)
+  - Every rate/price used in value computation
+  - Every external dependency that affects value
+Score: count investigated paths / total paths in the contract.
+If any value-moving function was NOT investigated, coverage is incomplete.
+
+CRITERION 2 — BOUNDARY COVERAGE (weight: 0.25)
+Has EVERY boundary been examined?
+  - Every external call and what could happen during it
+  - Every arithmetic operation and who benefits from truncation
+  - Every permission check and whether it can be bypassed
+  - Every state read and whether it could be stale
+  - Every assumption about external contract behavior
+Score: boundaries examined / total boundaries identified.
+
+CRITERION 3 — GROUNDING QUALITY (weight: 0.20)
+Is EVERY prompt grounded in specific code?
+  - No generic claims ("this could have reentrancy")
+  - Every statement cites specific function, variable, or code path
+  - Dataset evidence is used as supporting evidence, not as template
+Score: grounded prompts / total prompts.
+
+CRITERION 4 — ACTIONABILITY (weight: 0.15)
+Can an analyst actually FOLLOW each prompt to a conclusion?
+  - Clear investigation steps
+  - Specific verification plan (what test to write)
+  - Concrete success/failure criteria
+  - Not too vague, not too narrow
+Score: actionable prompts / total prompts.
+
+CRITERION 5 — REASONING DEPTH (weight: 0.15)
+Does the methodology go beyond surface observations?
+  - Not just "this function has an external call" but WHY that call
+    creates a specific value extraction opportunity
+  - Not just "there's arithmetic" but HOW specific inputs create
+    specific profit for the attacker
+  - Considers multi-step attacks, cross-function interactions,
+    economic manipulation, and composition effects
+Score: prompts with deep reasoning / total prompts.
+
+FINAL SCORE = weighted sum of all criteria (0.0 to 1.0)
+
+For each gap found, specify:
+  - WHAT is missing (which value path, boundary, or aspect)
+  - WHERE in the code it should have been investigated
+  - WHY it matters (what could be missed)
+
+RECOMMENDATION:
+  - Score >= threshold → "converge" (methodology is good enough)
+  - Score < threshold → "refine" (specify exactly what to improve)"""
 
 # ════════════════════════════════════════════════════════════════════════
-# KNOWN VULNS SYNTHESIS GUIDE
-#
-# How to process historical vulnerability data into actionable knowledge
+# ADAPTIVE DEPTH — How to scale investigation to protocol complexity
 # ════════════════════════════════════════════════════════════════════════
 
-KNOWN_VULNS_GUIDE = """PROCESSING HISTORICAL VULNERABILITY DATA
+ADAPTIVE_DEPTH = """ADAPTIVE INVESTIGATION DEPTH
 
-You are given real-world findings from smart contract audits. Your task is
-not to categorize or label them but to extract the MECHANICS — the physics
-of how value actually moved from the protocol to an attacker.
+Not all contracts require the same investigation depth. A simple ERC20
+token needs less analysis than a cross-protocol lending aggregator.
+The system adapts:
 
-For each finding, ask:
-  1. What value moved? (tokens, ETH, shares, debt, collateral)
-  2. What false belief did the code hold? (what was the divergence between
-     the code's model and reality?)
-  3. What did the attacker control? (timing, inputs, external state,
-     deployed contracts)
-  4. What sequence of operations extracted the value?
-  5. What gate was supposed to prevent this, and why did it fail?
+COMPLEXITY INDICATORS (derived from source code):
+  - Number of external calls → more calls = deeper investigation
+  - Number of value types → more types = more conservation equations
+  - Presence of callbacks, hooks, or receive functions → reentrancy depth
+  - Use of oracles or external prices → price manipulation depth
+  - Cross-contract interactions → composition attack depth
+  - Upgradeability → upgrade exploitation depth
+  - Number of state variables → more state = more invariants to check
+  - Use of assembly → low-level manipulation depth
+  - Token standard diversity → interface assumption depth
 
-Group findings by MECHANIC (the physics of the drainage) not by label.
-Cases where the same conservation break occurred — even if they have
-different traditional names — should be grouped together.
+DEPTH LEVELS:
+  SHALLOW (1 iteration, simple contracts):
+    - Single token, no external calls, straightforward logic
+    - Focus: arithmetic precision, permission logic, basic state
+  MODERATE (2 iterations, standard DeFi):
+    - Lending, staking, vaults with oracle dependencies
+    - Focus: all shallow + price manipulation, stale state, callbacks
+  DEEP (3+ iterations, complex protocols):
+    - Cross-protocol, multi-token, governance, bridges
+    - Focus: all moderate + composition attacks, cross-function
+      reentrancy, economic manipulation, upgrade exploitation
 
-Your output will be used to build intuition about HOW value conservation
-breaks so the investigation can predict where it will break in NEW ways."""
+The engine auto-detects complexity from the source code and sets the
+appropriate max_iterations. This is not a hard rule — if evaluation
+reveals gaps at any depth, the engine refines regardless."""
+
+# ════════════════════════════════════════════════════════════════════════
+# GUIDEBOOK QUALITY STANDARD — What makes methodology good enough
+# ════════════════════════════════════════════════════════════════════════
+
+GUIDEBOOK_STANDARD = """INVESTIGATION GUIDEBOOK QUALITY STANDARD
+
+The final guidebook must satisfy ALL of these:
+
+1. SELF-CONTAINED: An analyst receiving only the guidebook (no prior
+   context) can understand and follow every investigation prompt.
+
+2. COMPLETE: Every value-moving function, every external call, every
+   arithmetic operation, and every permission check in the contract
+   has been addressed by at least one investigation prompt.
+
+3. GROUNDED: Every prompt cites specific code. No generic advice.
+
+4. VERIFIABLE: Every prompt includes a concrete verification plan —
+   a test to write, values to use, assertions to check.
+
+5. PRIORITIZED: Prompts are ordered by impact potential. The highest-
+   impact investigations come first.
+
+6. REASONED: Each prompt explains WHY this investigation matters —
+   not just "check this" but "this matters because if the belief
+   encoded in function X is false, then Y amount of value can be
+   extracted through Z mechanism."
+
+7. EVOLVED: The guidebook includes its evaluation history — proof
+   that the methodology was self-tested and refined. This is not
+   just metadata; it demonstrates the reasoning chain that led to
+   the final methodology.
+
+8. ADAPTIVE: The depth and focus of the guidebook matches the
+   complexity of the contract. A simple token guidebook is concise.
+   A complex lending protocol guidebook is extensive.
+
+A guidebook that meets all 8 criteria is methodology capable of
+discovering vulnerabilities that automated tools, pattern matchers,
+and even experienced auditors might miss — because it reasons from
+the specific code, not from generic patterns."""
+
+# ════════════════════════════════════════════════════════════════════════
+# KNOWN VULNS PROCESSING — How to use dataset evidence
+# ════════════════════════════════════════════════════════════════════════
+
+DATASET_EVIDENCE_GUIDE = """PROCESSING DATASET EVIDENCE
+
+You are given real-world findings from smart contract audits. These
+findings are EVIDENCE — data about what has actually gone wrong in
+deployed contracts. Use them as follows:
+
+1. EXTRACT THE FALSE BELIEF
+   For each finding, identify what the code believed that was actually
+   false. Not the vulnerability label — the FALSE BELIEF. Example:
+   "The code believed token.transfer() always transfers the exact
+   amount specified" — this is a false belief about fee-on-transfer.
+
+2. GENERALIZE THE BOUNDARY
+   Which boundary does this false belief sit at? (See PHILOSOPHY.)
+   Group findings by boundary, not by traditional category. Cases
+   where different "vulnerability types" share the same boundary
+   are actually the same class of false belief.
+
+3. APPLY TO CURRENT CODE
+   For each false belief found in the dataset: does the current
+   contract under investigation hold the same belief? Check the
+   actual code. If yes, this is a grounded investigation lead.
+   If no, move on — do not force a pattern onto code that doesn't
+   exhibit it.
+
+4. LOOK FOR NOVEL BOUNDARIES
+   The dataset shows where code HAS failed. But the current contract
+   may have boundaries the dataset hasn't seen. Use the dataset to
+   build intuition about HOW false beliefs form, then apply that
+   intuition to find NEW false beliefs in the current code.
+
+The dataset is a teacher, not a template."""

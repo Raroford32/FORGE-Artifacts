@@ -98,192 +98,328 @@ def invoke_classify(cwe_info: str, vuln_info: str):
 
 
 # ──────────────────────────────────────────────────────────────
-# Discovery Module — Value-Drain 0-Day Investigation Engine
+# Adaptive Investigation Engine — Philosophy-Based Discovery
 #
-# Each prompt below carries the investigation framework: the mission,
-# the core principles, and the stage-specific reasoning guide.
-# This creates a coherent reasoning thread across all stages —
-# the same investigator, building understanding progressively.
+# The engine uses 5 focused invocations in an adaptive loop:
+#   understand → generate → evaluate → refine → (loop) → guidebook
 #
-# Import the framework so prompts stay in sync with the methodology.
+# Each invocation carries the framework philosophy and grounding
+# rules. There is no fixed pipeline — the engine decides what to
+# investigate based on what it discovers.
 # ──────────────────────────────────────────────────────────────
 from discovery.framework import (
     MISSION,
     SYSTEM_IDENTITY,
-    CORE_PRINCIPLES,
-    STAGE_1_GUIDE,
-    STAGE_2_GUIDE,
-    STAGE_3_GUIDE,
-    STAGE_4_GUIDE,
-    DRAINAGE_MECHANICS,
-    TRANSITION_1_TO_2,
-    TRANSITION_2_TO_3,
-    TRANSITION_3_TO_4,
-    KNOWN_VULNS_GUIDE,
+    PHILOSOPHY,
+    AXIOMS,
+    REASONING_METHOD,
+    GROUNDING_RULES,
+    EVALUATION_CRITERIA,
+    ADAPTIVE_DEPTH,
+    GUIDEBOOK_STANDARD,
+    DATASET_EVIDENCE_GUIDE,
 )
 
 
 @ell.simple(model=MODEL, client=CLIENT, temperature=0.3)
-def invoke_contract_decompose(source_code: str):
-    """Phase 1 — Build a complete understanding of the contract's value system."""
+def invoke_understand(source_code: str, dataset_context: str, prior_gaps: str = ""):
+    """
+    Adaptive understanding — reads source code and builds a complete
+    model of value, trust, and state. If prior_gaps is provided (from
+    a refinement iteration), focuses on addressing those specific gaps.
+    """
+    gap_instruction = ""
+    if prior_gaps:
+        gap_instruction = (
+            f"\n\nIMPORTANT — PRIOR EVALUATION FOUND THESE GAPS:\n{prior_gaps}\n"
+            "Your understanding MUST address these gaps specifically. "
+            "Do not repeat previous analysis — focus on what was missed."
+        )
+
     return [
         ell.system(SYSTEM_IDENTITY),
         ell.user(
             f"""MISSION: {MISSION}
 
-You are beginning Phase 1 of a multi-phase investigation. Read the reasoning
-framework below carefully — it will guide your thinking through this phase
-and all subsequent phases.
+{PHILOSOPHY}
 
-{CORE_PRINCIPLES}
+{AXIOMS}
 
-{STAGE_1_GUIDE}
+{REASONING_METHOD}
 
-Now read the source code below and build your value-lifecycle model.
-Output as structured JSON wrapped in ```json``` blocks. Include every
-observation, even those that do not fit neatly into a category — the goal
-is completeness of understanding, not conformity to a template.
+{GROUNDING_RULES}
+{gap_instruction}
 
+=== SOURCE CODE ===
 ```solidity
 {source_code}
 ```
 
-Begin Phase 1 analysis."""
-        ),
-    ]
+=== DATASET EVIDENCE (real-world findings from {len(dataset_context)} chars of audit data) ===
+{dataset_context[:6000] if dataset_context else "No dataset evidence available."}
 
+Read the source code above. Apply the reasoning method. Build your
+understanding of:
+1. Every form of value this contract touches
+2. The complete lifecycle of each value type (entry → transform → exit)
+3. The conservation equations (using actual variable names from the code)
+4. Every boundary where the code's model meets reality
+5. Every false belief the code might hold at each boundary
 
-@ell.simple(model=MODEL, client=CLIENT, temperature=0.4)
-def invoke_attack_surface_mapping(contract_profile: str):
-    """Phase 2 — Find where value conservation breaks."""
-    return [
-        ell.system(SYSTEM_IDENTITY),
-        ell.user(
-            f"""MISSION: {MISSION}
-
-{TRANSITION_1_TO_2}
-
-You are now in Phase 2. Read the reasoning framework and the Phase 1 output
-below, then conduct your adversarial analysis.
-
-{CORE_PRINCIPLES}
-
-{STAGE_2_GUIDE}
-
-Below is the complete Phase 1 output — the value-lifecycle decomposition of
-the contract under investigation. This is YOUR understanding from the
-previous phase. Build on it.
-
-{contract_profile}
-
-Output drain surfaces as a JSON array wrapped in ```json``` blocks. For each
-drain surface include: value_path, broken_invariant, manipulation_vector,
-state_window, extraction_sequence, scale.
-
-Begin Phase 2 analysis."""
+Output your understanding as structured analysis. Be exhaustive — cite
+specific functions, variables, and code paths for every observation.
+Do NOT invent content. Every statement must be traceable to the code above."""
         ),
     ]
 
 
 @ell.simple(model=MODEL, client=CLIENT, temperature=0.5)
-def invoke_hypothesis_generation(contract_profile: str, attack_surfaces: str, known_vulns_context: str):
-    """Phase 3 — Construct concrete attack hypotheses."""
+def invoke_generate_methodology(understanding: str, source_code: str, dataset_context: str):
+    """
+    Generate investigation methodology — prompts and guides that an
+    analyst can follow to discover vulnerabilities in this specific contract.
+    """
     return [
         ell.system(SYSTEM_IDENTITY),
         ell.user(
             f"""MISSION: {MISSION}
 
-{TRANSITION_2_TO_3}
+{GROUNDING_RULES}
 
-You are now in Phase 3. You have the value-lifecycle model (Phase 1) and the
-drain surfaces (Phase 2). Your task is to construct complete attack hypotheses.
+{GUIDEBOOK_STANDARD}
 
-{CORE_PRINCIPLES}
+You have completed a deep understanding of this contract (below). Now
+produce INVESTIGATION METHODOLOGY — self-contained prompts and reasoning
+guides that teach an analyst how to find every vulnerability this contract
+might have.
 
-{STAGE_3_GUIDE}
+=== YOUR UNDERSTANDING OF THE CONTRACT ===
+{understanding}
 
-Additionally, here is context about how value has been drained from real-world
-contracts — described as mechanics, not labels. Use this to build intuition,
-not to pattern-match:
+=== SOURCE CODE (ground truth — verify all claims against this) ===
+```solidity
+{source_code[:8000]}
+```
 
-{known_vulns_context}
+=== DATASET EVIDENCE (how similar code has failed in the real world) ===
+{dataset_context[:4000] if dataset_context else "No dataset evidence."}
 
-=== PHASE 1 OUTPUT (Value Lifecycle) ===
-{contract_profile}
+PRODUCE a JSON object with two keys, wrapped in ```json``` blocks:
 
-=== PHASE 2 OUTPUT (Drain Surfaces) ===
-{attack_surfaces}
+{{
+  "investigation_prompts": [
+    {{
+      "id": <int>,
+      "title": "<specific investigation title>",
+      "false_belief": "<what the code believes that might not be true>",
+      "code_reference": "<specific function/variable/line cited>",
+      "boundary_type": "<which boundary from the philosophy>",
+      "investigation_steps": ["<step 1>", "<step 2>", ...],
+      "verification_plan": {{
+        "test_description": "<what Foundry test to write>",
+        "setup": "<contract deployment and initial state>",
+        "attack_sequence": "<exact function calls with arguments>",
+        "assertion": "<what to check: attacker.balance_after > before>"
+      }},
+      "impact_if_confirmed": "<what happens to value if this belief is false>",
+      "reasoning": "<WHY this investigation matters — the deep logic>"
+    }},
+    ...
+  ],
+  "reasoning_guides": [
+    {{
+      "title": "<guide title>",
+      "scope": "<what part of the contract this covers>",
+      "philosophy_connection": "<which axioms and boundaries apply>",
+      "guide_content": "<detailed reasoning guide for this investigation area>",
+      "key_questions": ["<question 1>", "<question 2>", ...]
+    }},
+    ...
+  ]
+}}
 
-Output hypotheses as a JSON array wrapped in ```json``` blocks. Each hypothesis
-must include: title, value_flow_break, attack_sequence, initial_state,
-caller_requirements, net_extraction, why_it_works, amplification, verification_plan.
+Requirements:
+- Every prompt must cite specific code (function name, variable, line)
+- Every prompt must include a verification plan
+- Every prompt must explain WHY the investigation matters
+- Prompts must be ordered by impact potential (highest first)
+- Do NOT include prompts for patterns the code does not exhibit
+- Cover EVERY value-moving function, external call, and arithmetic operation"""
+        ),
+    ]
 
-Begin Phase 3 analysis."""
+
+@ell.simple(model=MODEL, client=CLIENT, temperature=0.2)
+def invoke_evaluate(methodology: str, source_code: str, dataset_context: str):
+    """
+    Self-evaluation — strictly judge the quality of investigation methodology.
+    Returns structured evaluation with quality score and specific gaps.
+    """
+    return [
+        ell.system(
+            "You are a strict, honest evaluator of investigation methodology. "
+            "Your job is to find GAPS — things the methodology missed, claims "
+            "that are not grounded in code, prompts that an analyst could not "
+            "follow to a conclusion. You are NOT trying to validate the "
+            "methodology — you are trying to BREAK it. Be harsh. A methodology "
+            "that passes your evaluation must actually work."
+        ),
+        ell.user(
+            f"""{EVALUATION_CRITERIA}
+
+{GROUNDING_RULES}
+
+You are evaluating investigation methodology produced for a smart contract.
+Your evaluation must be STRICT. Check every criterion.
+
+=== METHODOLOGY BEING EVALUATED ===
+{methodology}
+
+=== SOURCE CODE (check all code citations against this) ===
+```solidity
+{source_code[:8000]}
+```
+
+=== DATASET CONTEXT (verify evidence usage) ===
+{dataset_context[:2000] if dataset_context else "No dataset evidence was available."}
+
+EVALUATE by producing a JSON object wrapped in ```json``` blocks:
+
+{{
+  "quality_score": <float 0.0-1.0>,
+  "criterion_scores": {{
+    "value_path_coverage": <float>,
+    "boundary_coverage": <float>,
+    "grounding_quality": <float>,
+    "actionability": <float>,
+    "reasoning_depth": <float>
+  }},
+  "coverage_gaps": [
+    "<specific function/variable/path that was NOT investigated>"
+  ],
+  "depth_issues": [
+    "<specific prompt that needs deeper reasoning and WHY>"
+  ],
+  "grounding_failures": [
+    "<specific claim that does not cite code or cites wrong code>"
+  ],
+  "strengths": [
+    "<what the methodology does well>"
+  ],
+  "recommendation": "<'converge' if score >= threshold, else 'refine'>",
+  "refinement_targets": [
+    "<exact description of what to improve, with code references>"
+  ]
+}}
+
+Be specific. "Needs more coverage" is useless feedback. "The swap()
+function on line 45 was not investigated despite having an external
+call to router.getAmountOut()" is useful feedback."""
         ),
     ]
 
 
 @ell.simple(model=MODEL, client=CLIENT, temperature=0.4)
-def invoke_discovery_prompt_synthesis(
-    contract_profile: str,
-    attack_surfaces: str,
-    hypotheses: str,
-    protocol_type: str,
-):
-    """Phase 4 — Synthesize self-contained investigation prompts."""
+def invoke_refine(methodology: str, evaluation_feedback: str, source_code: str):
+    """
+    Refine methodology based on evaluation feedback. Addresses specific
+    gaps without losing what already works.
+    """
     return [
         ell.system(SYSTEM_IDENTITY),
         ell.user(
             f"""MISSION: {MISSION}
 
-{TRANSITION_3_TO_4}
+{GROUNDING_RULES}
 
-You are now in Phase 4 — the final phase. You have the complete investigation:
-value lifecycle (Phase 1), drain surfaces (Phase 2), and attack hypotheses
-(Phase 3). Transform everything into self-contained investigation prompts.
+You produced investigation methodology for a smart contract. An evaluator
+found specific gaps and weaknesses. Your task is to REFINE the methodology
+to address every gap while preserving everything that already works.
 
-{STAGE_4_GUIDE}
+=== EVALUATION FEEDBACK ===
+{evaluation_feedback}
 
-=== PHASE 1 OUTPUT (Value Lifecycle) ===
-{contract_profile}
+=== CURRENT METHODOLOGY (preserve what works, fix what's broken) ===
+{methodology}
 
-=== PHASE 2 OUTPUT (Drain Surfaces) ===
-{attack_surfaces}
+=== SOURCE CODE (ground truth for all refinements) ===
+```solidity
+{source_code[:8000]}
+```
 
-=== PHASE 3 OUTPUT (Attack Hypotheses) ===
-{hypotheses}
+PRODUCE the COMPLETE refined methodology as a JSON object wrapped in
+```json``` blocks, with the same structure as the original:
+  "investigation_prompts": [...],
+  "reasoning_guides": [...]
 
-Output as JSON with two keys: "discovery_prompts" (array of prompt objects)
-and "investigation_roadmap" (array of ordered investigation steps with
-rationale). Wrap in ```json``` blocks.
-
-Begin Phase 4 synthesis."""
+RULES FOR REFINEMENT:
+- Address EVERY gap listed in the evaluation
+- Do NOT remove prompts that the evaluator praised
+- New prompts must cite specific code (function, variable, line)
+- New prompts must include verification plans
+- If a grounding failure was identified, fix the citation or remove the claim
+- The refined methodology must be STRICTLY BETTER than the original"""
         ),
     ]
 
 
 @ell.simple(model=MODEL, client=CLIENT, temperature=0.3)
-def invoke_known_vulns_synthesis(dataset_context: str, protocol_type: str):
-    """Process historical vulnerability data into value-drainage mechanics."""
+def invoke_synthesize_guidebook(
+    methodology: str,
+    understanding: str,
+    evaluation_history: str,
+    source_code: str,
+):
+    """
+    Final synthesis — produce the self-validated investigation guidebook.
+    This is the final output of the engine.
+    """
     return [
         ell.system(SYSTEM_IDENTITY),
         ell.user(
             f"""MISSION: {MISSION}
 
-You are processing historical data to build a knowledge foundation for the
-investigation. This is NOT a categorization exercise. You are extracting
-the MECHANICS of value drainage — the physics of how money has actually
-left smart contracts in the real world.
+{GUIDEBOOK_STANDARD}
 
-{KNOWN_VULNS_GUIDE}
+You have produced investigation methodology through an iterative process
+of generation, evaluation, and refinement. Now synthesize the FINAL
+INVESTIGATION GUIDEBOOK — the definitive methodology for discovering
+vulnerabilities in this contract.
 
-Here is data from real-world audit reports. Process it according to the
-framework above. Focus on findings relevant to: {protocol_type}
+=== FINAL METHODOLOGY (after all refinement iterations) ===
+{methodology}
 
-{dataset_context}
+=== CONTRACT UNDERSTANDING (your deep analysis) ===
+{understanding}
 
-Output as structured plain text organized by drainage mechanic — not by
-vulnerability label. Group cases where the same conservation break occurred
-even if they have different traditional names."""
+=== EVALUATION HISTORY (proof of self-validation) ===
+{evaluation_history}
+
+=== SOURCE CODE ===
+```solidity
+{source_code[:6000]}
+```
+
+PRODUCE the final guidebook as a JSON object wrapped in ```json``` blocks:
+
+{{
+  "guidebook_title": "<descriptive title for this investigation>",
+  "protocol_summary": "<what this contract does, in one paragraph>",
+  "investigation_prompts": [
+    ... (the refined, validated prompts — ordered by priority)
+  ],
+  "reasoning_guides": [
+    ... (the reasoning guides — organized by investigation area)
+  ],
+  "investigation_roadmap": [
+    "<ordered list of investigation steps with rationale>"
+  ],
+  "key_findings_summary": "<what the methodology is most likely to uncover>",
+  "methodology_confidence": "<assessment of how thorough this guidebook is>"
+}}
+
+This guidebook will be given to analysts who have never seen this contract.
+It must be SELF-CONTAINED — everything they need to investigate is here.
+Every prompt must cite specific code. Every guide must teach reasoning."""
         ),
     ]
