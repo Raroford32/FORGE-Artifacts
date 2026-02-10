@@ -21,6 +21,7 @@ from extractor.extract_processor import ExtractProcessor
 from classifier.map_processor import ClassifyProcessor
 from fetcher.fetch_processor import FetchProcessor
 from builder.build_processor import BuildProcessor
+from discovery.discovery_processor import DiscoveryProcessor
 
 from core.invoker import *
 
@@ -66,6 +67,10 @@ def cli(ctx, log, config):
         table.add_row("fetch", "Fetch source code from extracted JSON")
         table.add_row(
             "forge", "Complete pipeline: FORGE dataset from security documents"
+        )
+        table.add_row(
+            "discover",
+            "Generate 0-day discovery prompts & guides from smart contracts",
         )
 
         console.print(table)
@@ -157,6 +162,48 @@ def forge(target, output, log, config):
     build_processor = BuildProcessor("forge", target, output, log, config)
     build_processor.run()
     # Your extract_then_classify implementation here
+
+
+@cli.command()
+@click.option(
+    "--target",
+    "-t",
+    required=True,
+    help="Path to Solidity file, directory of .sol files, or FORGE JSON output with project_path",
+)
+@click.option(
+    "--output",
+    "-o",
+    required=True,
+    help="Path to output directory for discovery report",
+)
+@common_options
+def discover(target, output, log, config):
+    """Generate 0-day discovery prompts and investigation guides from smart contracts.
+
+    Analyzes Solidity source code through a multi-stage pipeline:
+    structural decomposition, attack surface mapping, novel hypothesis
+    generation, and discovery prompt synthesis. Outputs a comprehensive
+    report with self-contained prompts for LLM-driven vulnerability hunting
+    and step-by-step investigation guides for security researchers.
+    """
+    console.print(
+        Panel(
+            f"[bold red]0-Day Discovery Pipeline[/bold red]\n"
+            f"Target: {target}\n"
+            f"Output: {output}",
+            border_style="red",
+            expand=False,
+        )
+    )
+    console.print(
+        "[yellow]Stages: Decompose -> Attack Surface -> Hypothesize -> Synthesize Prompts[/yellow]"
+    )
+    discovery_processor = DiscoveryProcessor("discover", target, output, log, config)
+    discovery_processor.run()
+    console.print(
+        f"[bold green]Discovery report written to {output}[/bold green]"
+    )
 
 
 if __name__ == "__main__":

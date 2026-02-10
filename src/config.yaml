@@ -1,6 +1,6 @@
 app:
     name: FORGE
-    version: 0.0.6
+    version: 0.1.0
     description: FORGE smart contract vulnerability datasets automatically
 
 global:
@@ -42,4 +42,10 @@ classifier:
 fetcher:
     mode: default  # addr_only, url_only, default
     enabled: ["github","eth","bsc","polygon"] # Enabled fetchers.
+
+discovery:
+    analysis_depth: comprehensive  # comprehensive or quick. Comprehensive runs all stages with full depth.
+    dataset_path: ""  # Path to FORGE dataset results/ directory for known vuln correlation. Leave empty to use built-in knowledge.
+    valid_ext: [".sol", ".json"]  # Accepted input file types for discovery pipeline
+    max_contract_tokens: 12000  # Max tokens per contract for LLM decomposition (larger contracts are truncated)
 

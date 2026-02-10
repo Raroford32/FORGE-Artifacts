@@ -142,3 +142,104 @@ class Report(BaseModel):
 class History(BaseModel):
     finished: List = []
     failed: List = []
+
+
+# ──────────────────────────────────────────────
+# Discovery Module Models
+# ──────────────────────────────────────────────
+
+
+@dataclass
+class StateVariable:
+    name: str = ""
+    var_type: str = ""
+    visibility: str = ""
+    mutability: str = ""
+    slot_info: str = ""
+
+
+@dataclass
+class FunctionSignature:
+    name: str = ""
+    visibility: str = ""
+    modifiers: List[str] = field(default_factory=list)
+    parameters: List[str] = field(default_factory=list)
+    returns: List[str] = field(default_factory=list)
+    state_mutations: List[str] = field(default_factory=list)
+    external_calls: List[str] = field(default_factory=list)
+    is_payable: bool = False
+
+
+@dataclass
+class ContractProfile:
+    """Deep structural profile of a smart contract."""
+    file_path: str = ""
+    contract_name: str = ""
+    compiler_pragma: str = ""
+    is_upgradeable: bool = False
+    is_proxy: bool = False
+    inheritance_chain: List[str] = field(default_factory=list)
+    imported_contracts: List[str] = field(default_factory=list)
+    state_variables: List[StateVariable] = field(default_factory=list)
+    functions: List[FunctionSignature] = field(default_factory=list)
+    events: List[str] = field(default_factory=list)
+    modifiers: List[str] = field(default_factory=list)
+    external_dependencies: List[str] = field(default_factory=list)
+    protocol_type: str = ""
+    uses_assembly: bool = False
+    uses_delegatecall: bool = False
+    uses_selfdestruct: bool = False
+    uses_create2: bool = False
+    token_standards: List[str] = field(default_factory=list)
+    raw_source: str = ""
+
+
+@dataclass
+class AttackSurface:
+    """Identified attack surface area in a contract."""
+    entry_point: str = ""
+    surface_type: str = ""
+    trust_boundary: str = ""
+    value_flow: str = ""
+    description: str = ""
+    risk_factors: List[str] = field(default_factory=list)
+
+
+@dataclass
+class VulnerabilityHypothesis:
+    """A reasoned hypothesis about a potential novel vulnerability."""
+    id: int = 0
+    title: str = ""
+    hypothesis: str = ""
+    attack_narrative: str = ""
+    affected_functions: List[str] = field(default_factory=list)
+    preconditions: List[str] = field(default_factory=list)
+    complexity: str = ""
+    impact: str = ""
+    novelty_reasoning: str = ""
+    investigation_steps: List[str] = field(default_factory=list)
+    related_cwes: List[str] = field(default_factory=list)
+
+
+@dataclass
+class DiscoveryPrompt:
+    """A structured prompt for LLM-driven 0-day discovery."""
+    id: int = 0
+    category: str = ""
+    title: str = ""
+    system_context: str = ""
+    analysis_prompt: str = ""
+    focus_areas: List[str] = field(default_factory=list)
+    contract_context: str = ""
+    investigation_guide: List[str] = field(default_factory=list)
+
+
+class DiscoveryReport(BaseModel):
+    """Complete output of the discovery pipeline."""
+    target_path: str = ""
+    contract_profiles: List[Dict] = Field(default_factory=list)
+    attack_surfaces: List[Dict] = Field(default_factory=list)
+    vulnerability_hypotheses: List[Dict] = Field(default_factory=list)
+    discovery_prompts: List[Dict] = Field(default_factory=list)
+    meta_analysis: str = ""
+    investigation_roadmap: List[str] = Field(default_factory=list)
