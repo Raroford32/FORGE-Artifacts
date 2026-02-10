@@ -214,151 +214,155 @@ class PromptGenerator(BaseModel):
         self, protocol_type: str, profile_text: str, source_code: str
     ) -> List[Dict]:
         """
-        Generate always-applicable meta-investigation prompts that probe
-        for vulnerability classes that are universally relevant regardless
-        of specific contract analysis.
+        Generate universally-applicable meta-investigation prompts that reason
+        about value conservation from first principles — no pattern labels,
+        no traditional checklists.
         """
         source_snippet = source_code[:2000] if len(source_code) > 2000 else source_code
 
         meta_prompts = [
             {
                 "id": 9000,
-                "category": "invariant_fuzzing",
-                "title": "Invariant Fuzzing Strategy Generator",
+                "category": "value_conservation_audit",
+                "title": "Complete Value Conservation Verification",
                 "system_context": (
-                    "You are an expert in property-based testing and fuzzing for smart contracts. "
-                    "You specialize in writing Foundry invariant tests that catch critical vulnerabilities."
+                    "You are investigating whether this smart contract maintains "
+                    "perfect conservation of value — that no transaction sequence "
+                    "allows an unprivileged caller to extract more than they put in."
                 ),
                 "analysis_prompt": (
-                    f"Given the following {protocol_type} smart contract, generate a comprehensive set of "
-                    f"invariant properties that should ALWAYS hold true. For each invariant:\n"
-                    f"1. State the invariant in plain English\n"
-                    f"2. Express it as a Solidity assertion\n"
-                    f"3. Describe a scenario where it could be violated\n"
-                    f"4. Write a Foundry invariant test function skeleton\n\n"
-                    f"Focus on:\n"
-                    f"- Balance invariants (sum of all user balances == total supply)\n"
-                    f"- State machine invariants (valid state transitions only)\n"
-                    f"- Economic invariants (no value creation from nothing)\n"
-                    f"- Access control invariants (privileges only through intended paths)\n"
-                    f"- Ordering invariants (operations must happen in correct sequence)\n\n"
+                    f"Given this contract, derive every value-conservation invariant "
+                    f"that must hold for the protocol to be solvent. Then, for each "
+                    f"invariant, attempt to construct a transaction sequence that "
+                    f"violates it.\n\n"
+                    f"Step 1: List every state variable or mapping that represents a "
+                    f"claim on value (balances, shares, debts, rewards, allowances).\n\n"
+                    f"Step 2: For each, write a mathematical equation that relates the "
+                    f"sum of internal claims to actual held value. Example: "
+                    f"sum(userShares[i] * pricePerShare) <= token.balanceOf(this)\n\n"
+                    f"Step 3: For each equation, find every code path that modifies "
+                    f"any variable in the equation. Check: after that code path "
+                    f"completes, does the equation still hold? What about DURING "
+                    f"execution (e.g. after line N but before line M)?\n\n"
+                    f"Step 4: For each potential break, write a concrete Foundry test:\n"
+                    f"  - Set up initial state\n"
+                    f"  - Execute the violating transaction sequence\n"
+                    f"  - Assert that the attacker's balance increased net of costs\n\n"
                     f"Contract:\n```solidity\n{source_snippet}\n```"
                 ),
                 "focus_areas": [
-                    "Balance consistency",
-                    "State machine correctness",
-                    "Economic soundness",
-                    "Access control integrity",
+                    "Sum of internal claims vs actual balance",
+                    "Mid-execution state where invariant temporarily breaks",
+                    "Transaction sequences that permanently shift value",
+                    "Rates/multipliers that can be distorted before value transfer",
                 ],
                 "contract_context": source_snippet,
                 "investigation_guide": [
-                    "Implement each invariant as a Foundry invariant_* test function",
-                    "Configure handler functions that call every external/public function",
-                    "Run with high iteration count: forge test --match-test invariant -vvv",
-                    "Any invariant violation indicates a potential vulnerability",
-                    "Analyze the call sequence that caused the violation",
+                    "Enumerate every (internal_record, actual_balance) pair",
+                    "Write the conservation equation for each pair",
+                    "For every function that modifies any term, check the equation holds after completion",
+                    "Check for windows during execution where the equation is broken and external calls fire",
+                    "Implement as Foundry invariant_* tests with handler functions calling every public function",
+                    "Run: forge test --match-test invariant -vvvv — any failure = potential drain",
                 ],
             },
             {
                 "id": 9001,
-                "category": "cross_contract_reentrancy",
-                "title": "Deep Reentrancy Surface Analysis",
+                "category": "stale_state_extraction",
+                "title": "Value Extraction Through Stale State Windows",
                 "system_context": (
-                    "You are an expert in reentrancy vulnerabilities in EVM smart contracts. "
-                    "You understand all forms: classic, cross-function, cross-contract, read-only, "
-                    "and governance reentrancy. You can identify reentrancy surfaces that "
-                    "automated tools like Slither consistently miss."
+                    "You are investigating whether there are moments during this "
+                    "contract's execution when internal accounting does not match "
+                    "reality, and whether a caller can act on that stale state to "
+                    "extract value."
                 ),
                 "analysis_prompt": (
-                    f"Analyze the following smart contract for ALL forms of reentrancy vulnerability. "
-                    f"Go far beyond the check-effects-interactions pattern. Specifically analyze:\n\n"
-                    f"1. **View Function Reentrancy**: Are there view functions that read state that "
-                    f"could be inconsistent during a callback? Could another protocol call these "
-                    f"view functions during a callback from this contract?\n\n"
-                    f"2. **Cross-Function Reentrancy**: If function A makes an external call, "
-                    f"could an attacker reenter through function B and exploit state that A "
-                    f"has partially updated?\n\n"
-                    f"3. **Cross-Contract Reentrancy**: Does this contract interact with other "
-                    f"contracts that could trigger callbacks? Consider ERC777 hooks, ERC1155 "
-                    f"hooks, Uniswap callbacks, flash loan callbacks, etc.\n\n"
-                    f"4. **Governance Reentrancy**: Could a governance action be executed during "
-                    f"a callback that changes parameters mid-operation?\n\n"
-                    f"5. **Transient Storage Reentrancy**: If the contract uses EIP-1153 transient "
-                    f"storage for reentrancy guards, are there edge cases?\n\n"
-                    f"For each potential reentrancy path found:\n"
-                    f"- Describe the exact call chain\n"
-                    f"- Identify the inconsistent state window\n"
-                    f"- Provide a concrete attack scenario\n"
-                    f"- Estimate the impact\n\n"
+                    f"Map every point in this contract where execution is handed "
+                    f"to external code (external calls, token transfers, callbacks, "
+                    f"delegate calls) and determine: at that exact moment, which "
+                    f"internal state variables are stale (not yet updated to reflect "
+                    f"the current operation)?\n\n"
+                    f"For each such window:\n"
+                    f"1. What state is stale and what would the correct value be?\n"
+                    f"2. Can the external code (or a contract it calls back into) read "
+                    f"   or act on the stale state?\n"
+                    f"3. If so, what value can be extracted by acting on stale state?\n"
+                    f"4. Write the exact sequence: which function to call, what happens "
+                    f"   during the callback, what to call back into, and what the net "
+                    f"   extraction is.\n\n"
+                    f"Do NOT limit yourself to the contract calling back into itself. "
+                    f"Consider: the contract calls token.transfer(), the token contract "
+                    f"calls back to a third contract, which reads a view function on "
+                    f"this contract that returns stale data, and uses that stale data "
+                    f"to make a favorable trade.\n\n"
                     f"Contract:\n```solidity\n{source_snippet}\n```"
                 ),
                 "focus_areas": [
-                    "External calls before state updates",
-                    "View function state consistency",
-                    "Cross-function shared state",
-                    "Token callback hooks",
-                    "Flash loan callbacks",
+                    "Every external call and which state is stale at that moment",
+                    "View functions that can be called during stale windows",
+                    "Multi-contract callback chains that exploit stale reads",
+                    "State update ordering — what is updated before vs after external calls",
                 ],
                 "contract_context": source_snippet,
                 "investigation_guide": [
-                    "Map every external call and the state it occurs in",
-                    "For each external call, list all state that has been modified vs not yet modified",
-                    "Check if any view function could return incorrect data during the callback window",
-                    "Build a reentrancy attack contract targeting identified paths",
-                    "Test with both ERC20 and ERC777 tokens if applicable",
+                    "For every external call: list state modified BEFORE and AFTER the call",
+                    "For every view function: check if it returns different values before vs after the external call",
+                    "Deploy a malicious contract that receives the callback and re-enters or queries stale state",
+                    "Calculate net value extraction for the stale-state read scenario",
+                    "Write a Foundry test: deploy attacker contract, trigger the stale window, assert profit > 0",
                 ],
             },
             {
                 "id": 9002,
-                "category": "precision_and_rounding",
-                "title": "Mathematical Precision Exploit Analysis",
+                "category": "arithmetic_value_leak",
+                "title": "Value Leakage Through Computational Imprecision",
                 "system_context": (
-                    "You are a mathematician and smart contract auditor specializing in "
-                    "numerical precision vulnerabilities. You understand fixed-point arithmetic, "
-                    "rounding behavior in Solidity, and how precision errors accumulate over "
-                    "many operations to create exploitable conditions."
+                    "You are investigating whether the mathematical computations "
+                    "in this contract — division truncation, multiplication ordering, "
+                    "rate calculations — create a systematic leak where small amounts "
+                    "of value can be repeatedly extracted or where a single large "
+                    "computation produces an exploitable rounding windfall."
                 ),
                 "analysis_prompt": (
-                    f"Perform a thorough mathematical precision analysis of this smart contract. "
-                    f"Specifically investigate:\n\n"
-                    f"1. **Rounding Direction**: For every division operation, determine if it rounds "
-                    f"in the direction that favors the protocol or the user. Identify any operation "
-                    f"where rounding could be exploited (e.g., round down on deposit, round up on withdraw).\n\n"
-                    f"2. **Precision Loss Chains**: Identify sequences of operations where precision "
-                    f"loss accumulates. Calculate worst-case precision loss for realistic scenarios.\n\n"
-                    f"3. **First Depositor / Share Inflation**: If this contract uses share-based "
-                    f"accounting (like ERC4626), analyze the first depositor attack surface. "
-                    f"Can an attacker inflate share price through donations?\n\n"
-                    f"4. **Fee Calculation Edge Cases**: Analyze all fee calculations for:\n"
-                    f"   - Zero-fee edge cases (amount too small to generate a fee)\n"
-                    f"   - Fee-on-fee compounding errors\n"
-                    f"   - Fee bypass through specific amounts\n\n"
-                    f"5. **Exchange Rate Manipulation**: If the contract has any exchange rate "
-                    f"(shares/assets, collateral/debt), analyze how it can be manipulated "
-                    f"and what the impact would be.\n\n"
-                    f"6. **Overflow/Underflow in Unchecked Blocks**: Identify all unchecked "
-                    f"blocks and analyze whether overflow/underflow could occur.\n\n"
-                    f"For each issue found, provide:\n"
-                    f"- The exact mathematical formula involved\n"
-                    f"- A concrete numerical example showing the exploit\n"
-                    f"- The profit an attacker could extract\n"
-                    f"- Suggested fix\n\n"
+                    f"Trace every arithmetic operation in this contract that affects "
+                    f"how much value a caller receives or must pay. For each:\n\n"
+                    f"1. Does the computation TRUNCATE in the caller's favor or the "
+                    f"   protocol's favor? (Solidity division truncates toward zero — "
+                    f"   does this help the caller or the protocol in each case?)\n\n"
+                    f"2. Can the caller choose inputs that MAXIMIZE truncation in "
+                    f"   their favor? (e.g. deposit an amount that, divided by the "
+                    f"   rate, truncates to give them one extra share; or withdraw "
+                    f"   an amount where the fee rounds to zero)\n\n"
+                    f"3. Is there a rate, price, or multiplier that the caller can "
+                    f"   DISTORT before the computation? (e.g. donate tokens to "
+                    f"   inflate pricePerShare, then withdraw at the inflated rate "
+                    f"   — does the contract use the inflated rate naively?)\n\n"
+                    f"4. Can the caller perform the operation MANY TIMES with small "
+                    f"   amounts to accumulate rounding in their favor? What is the "
+                    f"   profit after 1000 iterations? After 1M?\n\n"
+                    f"5. For the first-ever operation (empty pool, zero shares, zero "
+                    f"   balance): is there an initialization edge case where the "
+                    f"   computation produces a wildly incorrect result? Can the caller "
+                    f"   exploit this to establish a favorable rate permanently?\n\n"
+                    f"For each finding, provide:\n"
+                    f"- The exact formula from the code\n"
+                    f"- Concrete numbers: input X → output Y → attacker profit Z\n"
+                    f"- A Foundry test skeleton\n\n"
                     f"Contract:\n```solidity\n{source_snippet}\n```"
                 ),
                 "focus_areas": [
-                    "Division rounding direction",
-                    "Share/rate inflation",
-                    "Precision loss accumulation",
-                    "Fee calculation edge cases",
-                    "Unchecked arithmetic",
+                    "Every division and who benefits from the truncation",
+                    "Rates/prices the caller can inflate before a value-transfer computation",
+                    "Repeated small operations that accumulate rounding profit",
+                    "First-operation / empty-state edge cases in value calculations",
                 ],
                 "contract_context": source_snippet,
                 "investigation_guide": [
-                    "List every arithmetic operation (especially division) in the contract",
-                    "For each division, determine if rounding favors user or protocol",
-                    "Test with extreme values: very small amounts, very large amounts, 0, 1, type(uint256).max",
-                    "Calculate precision loss for realistic usage patterns over many operations",
-                    "Write Foundry tests with specific numerical edge cases",
+                    "List every division, modulo, and mulDiv operation in the contract",
+                    "For each: determine if truncation favors caller or protocol",
+                    "Test with: amount=1, amount=2, amount=type(uint256).max, amount just below a rounding boundary",
+                    "Test the empty-pool / first-depositor scenario with a donation before the second deposit",
+                    "Write a Foundry test that loops the operation 1000 times and checks cumulative profit",
                 ],
             },
         ]

@@ -98,286 +98,265 @@ def invoke_classify(cwe_info: str, vuln_info: str):
 
 
 # ──────────────────────────────────────────────────────────────
-# Discovery Module Invocations - 0-Day Vulnerability Hunting
+# Discovery Module — Value-Drain 0-Day Reasoning Engine
+#
+# Every prompt below is built on ONE axiom:
+#   "A vulnerability exists iff an unprivileged caller can construct
+#    a transaction sequence that ends with them holding more value
+#    than they started with, at the expense of the protocol or its
+#    users."
+#
+# There are no labels, no traditional categories, no checklists.
+# The LLM is guided to reason from first principles about VALUE
+# CONSERVATION — where it holds, and where it breaks.
 # ──────────────────────────────────────────────────────────────
 
 
 @ell.simple(model=MODEL, client=CLIENT, temperature=0.3)
 def invoke_contract_decompose(source_code: str):
-    """Deep structural decomposition of a smart contract."""
+    """Map the complete value lifecycle of a smart contract."""
     return [
         ell.system(
-            "You are Axiom, an elite smart contract security researcher with deep expertise in EVM internals, Solidity compiler behavior, DeFi protocol design, and novel attack vector discovery. You have discovered multiple 0-day vulnerabilities in production protocols. Your analysis goes far beyond automated tools - you reason about emergent behaviors, cross-function state corruption, economic invariant violations, and protocol-level design flaws that no scanner can detect."
+            "You are a first-principles reasoner about value in EVM smart contracts. "
+            "You do not think in vulnerability labels or audit checklists. "
+            "You think in terms of value: where it enters, how it is tracked, "
+            "what transforms it, what conditions release it, and where it exits. "
+            "A contract is a state machine that moves value. Your job is to map "
+            "that machine with absolute precision so every assumption about value "
+            "conservation becomes explicit."
         ),
         ell.user(
-            """Perform an exhaustive structural decomposition of the following smart contract source code. You must extract EVERY detail with surgical precision - missing anything could mean missing a critical 0-day.
+            """Decompose the following smart contract purely in terms of its VALUE LIFECYCLE.
 
-Extract and organize the following:
+Produce a JSON document with these sections:
 
-1. **CONTRACT IDENTITY**:
-   - Contract name, compiler pragma (exact version constraints and their implications)
-   - Inheritance chain (full linearization order and its security implications)
-   - All imports and their trust implications
-   - Whether this is a proxy, implementation, or standalone contract
-   - Upgradeability pattern used (if any) and its specific variant
+1. **value_entry_points**
+   Every path through which value (ETH, tokens, NFTs, shares, reward credits — anything
+   with economic worth) enters this contract. For each path list:
+   - the function and its caller requirements
+   - the token/asset type
+   - how the incoming value is recorded in internal accounting
+   - whether the recorded amount equals the actual amount received (or could diverge)
 
-2. **STATE ARCHITECTURE**:
-   - Every state variable: name, type, visibility, storage slot position implications
-   - Mapping structures and their key spaces (what controls access to what data)
-   - Nested mappings and structs (storage layout collision potential)
-   - Immutable vs mutable state boundaries
-   - State variables that represent balances, allowances, permissions, or protocol parameters
+2. **value_exit_points**
+   Every path through which value leaves this contract. Same detail as above, plus:
+   - what conditions gate the release
+   - who decides the amount
+   - whether the amount is computed from internal accounting or actual balance
 
-3. **FUNCTION SURFACE**:
-   - Every function: name, visibility, modifiers, parameters, return values
-   - Which state variables each function reads and writes (state mutation map)
-   - All external calls made by each function (call graph to untrusted code)
-   - Which functions are payable and handle ETH/native token
-   - Which functions use assembly/inline Yul
-   - Which functions use delegatecall, staticcall, or low-level call
-   - Callback patterns (reentrancy surface)
+3. **internal_accounting**
+   Every state variable or mapping that represents a claim on value (balances, shares,
+   debt positions, reward accumulators, allowances, etc.). For each:
+   - what value it tracks
+   - which functions increase it, which decrease it
+   - whether its sum across all holders is supposed to equal some actual balance
 
-4. **ACCESS CONTROL TOPOLOGY**:
-   - All modifiers and their exact logic
-   - Role hierarchy and privilege levels
-   - Which addresses are trusted and how trust is established
-   - Initialization/constructor trust assumptions
-   - Owner/admin/guardian/timelock patterns
+4. **value_transformations**
+   Every place where value is converted, exchanged, minted, burned, split, or merged.
+   For each transformation:
+   - the mathematical formula used
+   - whether rounding/truncation occurs and in whose favour
+   - what external data (prices, rates, timestamps) feeds into the calculation
+   - whether the transformation is atomic or can be interrupted mid-state
 
-5. **VALUE FLOW MAP**:
-   - All paths where tokens/ETH enter the contract
-   - All paths where tokens/ETH leave the contract
-   - Internal accounting vs actual balances
-   - Fee calculation and distribution paths
-   - Reward/yield calculation mechanisms
+5. **value_gates**
+   Every assumption, check, or condition that the code relies on to prevent unauthorized
+   value extraction. For each gate:
+   - the exact condition (code-level)
+   - what makes it true under normal operation
+   - what external or caller-controlled inputs could make it false
+   - whether the gate can be evaluated at a moment when the state is inconsistent
+     (e.g. during a callback, between two steps of a multi-step operation)
 
-6. **EXTERNAL DEPENDENCY MAP**:
-   - All external contract interfaces called
-   - Oracle dependencies and how prices/data are consumed
-   - Token standards interacted with (ERC20, ERC721, ERC1155, etc.)
-   - DEX/AMM integrations
-   - Governance/timelock dependencies
+6. **external_value_dependencies**
+   Every external contract call, oracle read, or off-chain data dependency that
+   influences how value moves. For each:
+   - what data is consumed and how it affects value calculations
+   - what happens if the external source returns an unexpected value, reverts,
+     or behaves differently from the code's implicit expectation
+   - whether the caller can influence the external source's return value within
+     the same transaction (or across a small number of blocks)
 
-7. **DANGEROUS PATTERNS INVENTORY**:
-   - Uses of assembly/Yul (exact operations)
-   - Uses of delegatecall (target resolution logic)
-   - Uses of selfdestruct/create/create2
-   - Unchecked arithmetic blocks
-   - Type casting operations
-   - abi.encode vs abi.encodePacked usage (collision potential)
-   - Block timestamp/number dependencies
-   - tx.origin usage
-   - Inline assembly memory operations
+7. **value_conservation_invariants**
+   State explicitly every equation or inequality that MUST hold for the protocol
+   to be solvent — e.g. "sum of all user shares × pricePerShare ≤ contract token
+   balance". List every invariant you can derive, even if it seems obvious.
 
-8. **PROTOCOL TYPE CLASSIFICATION**:
-   - Classify the protocol type (lending, DEX/AMM, yield aggregator, bridge, staking, governance, NFT marketplace, etc.)
-   - Identify the core protocol invariants that MUST hold
-   - Identify the economic model and its assumptions
-
-Format your response as structured JSON. Be exhaustive. Every missed detail is a potentially missed vulnerability.
+Be exhaustive. Output as a single JSON object wrapped in ```json``` blocks.
+Every missed value path is a potential drain vector.
 """
         ),
         ell.user(
-            "Yes, I understand. I will perform the most thorough structural decomposition possible, treating every detail as potentially security-critical."
+            "Understood. I will map every atom of value flow with zero assumptions "
+            "and zero reliance on named vulnerability patterns."
         ),
         ell.user(
-            f"Smart Contract Source Code:\n```solidity\n{source_code}\n```\n\nBegin exhaustive decomposition. Output as structured JSON wrapped in ```json``` blocks."
+            f"```solidity\n{source_code}\n```\n\nBegin value lifecycle decomposition."
         ),
     ]
 
 
 @ell.simple(model=MODEL, client=CLIENT, temperature=0.4)
 def invoke_attack_surface_mapping(contract_profile: str):
-    """Map all attack surfaces from the structural decomposition."""
+    """Identify every point where value conservation could break."""
     return [
         ell.system(
-            "You are Axiom, an elite offensive smart contract security researcher. You think like an attacker with unlimited resources, deep EVM knowledge, and access to flash loans, MEV infrastructure, and cross-protocol composability. Your specialty is finding attack surfaces that automated tools miss entirely - the kind that lead to real-world exploits worth millions."
+            "You are an adversarial reasoner. You are given a complete map of how "
+            "value flows through a smart contract. Your sole objective: find every "
+            "point where the conservation of value could be violated — where an "
+            "unprivileged caller can end a transaction sequence holding more value "
+            "than they started with. You do not use vulnerability labels. You reason "
+            "from the value map itself."
         ),
         ell.user(
-            """Given the following structural decomposition of a smart contract, perform an exhaustive attack surface analysis. Think beyond known vulnerability patterns. Consider how an attacker with the following capabilities would approach this contract:
+            f"""Below is a complete value-lifecycle decomposition of a smart contract.
 
-**ATTACKER CAPABILITIES TO ASSUME**:
-- Unlimited flash loan capital (any token, any amount)
-- Ability to deploy arbitrary contracts that interact with this one
-- MEV capability (transaction ordering, sandwich attacks, frontrunning)
-- Ability to manipulate oracle prices through market operations
-- Control over one or more governance token positions
-- Knowledge of all deployed contracts on the same chain
-- Ability to exploit timing between blocks and transactions
-- Access to historical transaction data and state changes
+Your task: enumerate every DRAIN SURFACE — a concrete mechanism by which an
+unprivileged external caller could extract net positive value from this contract.
 
-**ATTACK SURFACE CATEGORIES TO ANALYZE**:
+For each drain surface, provide:
 
-1. **ENTRY POINT ANALYSIS**:
-   - Every external/public function is a potential entry point
-   - For each: what can an unprivileged caller achieve?
-   - What state transitions can be triggered and in what sequence?
-   - What are the minimum requirements to call each function?
+**a) The value path**
+   Which entry points, transformations, and exit points are involved?
+   Trace the exact flow: caller puts in X of asset A, interacts with the contract,
+   and extracts Y of asset B where value(Y) > value(X).
 
-2. **CROSS-FUNCTION STATE CORRUPTION**:
-   - Can calling function A in a specific state, then function B, produce an inconsistent state?
-   - Are there multi-step operations that can be interrupted?
-   - Can partial execution of one path corrupt assumptions of another?
+**b) The broken assumption**
+   Which specific value gate or conservation invariant fails? Why?
+   What must be true for the gate to hold, and how does the caller make it false?
 
-3. **REENTRANCY SURFACE** (beyond simple reentrancy):
-   - Read-only reentrancy (viewing stale state during callback)
-   - Cross-contract reentrancy (through intermediary contracts)
-   - Cross-function reentrancy (reenter different function during callback)
-   - State inconsistency windows during external calls
+**c) The manipulation vector**
+   What does the caller control that lets them break the assumption?
+   Consider: call ordering, intermediate callbacks, external contract behavior,
+   flash-borrowed capital, block timing, price source influence, governance weight,
+   contract deployment, or any combination thereof.
 
-4. **ECONOMIC/MATHEMATICAL ATTACK SURFACE**:
-   - Precision loss accumulation paths
-   - Rounding direction exploitation (round up on deposit, round down on withdrawal)
-   - Share/exchange rate manipulation (first depositor, donation attacks)
-   - Fee calculation bypass or manipulation
-   - Inflation/deflation attack vectors
-   - Price manipulation through flash loans
+**d) The state window**
+   Is there a moment during execution when internal accounting is inconsistent
+   with actual balances? When the code has updated one variable but not yet
+   another? When an external call is in flight and the caller gets control back?
+   Describe the exact state window and what the caller can do inside it.
 
-5. **ACCESS CONTROL SURFACE**:
-   - Privilege escalation paths (can unprivileged user gain privileges?)
-   - Missing authorization checks (functions that should be restricted but aren't)
-   - Initialization front-running (can initialization be front-run or re-initialized?)
-   - Governance capture scenarios
-   - Timelock bypass possibilities
+**e) The extraction sequence**
+   Write the step-by-step transaction sequence (or multi-tx sequence) that
+   the caller executes. Be concrete:
+   - Tx 1: call X with parameters ...
+   - During callback / in next block: call Y ...
+   - Final state: caller gained Z tokens net
 
-6. **ORACLE/EXTERNAL DATA SURFACE**:
-   - Oracle manipulation impact paths
-   - Stale price exploitation
-   - TWAP manipulation feasibility
-   - Multi-oracle inconsistency
-   - Chainlink/price feed edge cases (sequencer downtime, L2-specific)
+**f) Scale of extraction**
+   Is this a single-shot drain, a repeated small leak, or an escalating
+   feedback loop? What bounds the extraction (if anything)?
 
-7. **TOKEN INTERACTION SURFACE**:
-   - Fee-on-transfer token handling
-   - Rebasing token handling
-   - ERC777 callback exploitation
-   - Approval race conditions
-   - Permit/signature replay
-   - Token contract upgrade risk (proxied tokens)
+Think about the contract as a black box that transforms inputs to outputs.
+The attacker's goal is simple: arrange inputs so outputs exceed inputs.
+Do not label anything with traditional names. Describe the MECHANICS.
 
-8. **STORAGE/MEMORY SURFACE**:
-   - Storage collision in proxy patterns
-   - Uninitialized storage/memory
-   - Dirty memory from assembly
-   - Transient storage (EIP-1153) edge cases
+Output as a JSON array of drain surfaces, each with the fields above.
+Wrap in ```json``` blocks.
 
-9. **PROTOCOL COMPOSABILITY SURFACE**:
-   - How does this contract interact with the broader DeFi ecosystem?
-   - Can positions in this protocol be used as collateral elsewhere?
-   - Can flash loan attacks combine this with other protocols?
-   - Liquidation cascade scenarios
-
-10. **UPGRADE/MIGRATION SURFACE**:
-    - Storage layout change risks
-    - Function selector collision risks
-    - Initialization gap during upgrade
-    - Delegatecall context confusion
-
-For each attack surface identified, provide:
-- The specific entry point(s) involved
-- The attack narrative (step-by-step how an attacker would exploit it)
-- Preconditions needed
-- Estimated impact (fund loss, protocol disruption, etc.)
-- Why this would be missed by automated tools
-
-Format output as structured JSON with an array of attack surfaces.
+Contract value decomposition:
+{contract_profile}
 """
         ),
         ell.user(
-            "Understood. I will map every attack surface with offensive precision, thinking like a real-world attacker, going far beyond what any automated scanner would find."
+            "I will systematically examine every value transition and find where "
+            "conservation breaks. Pure mechanics, no labels."
         ),
-        ell.user(
-            f"Contract Structural Decomposition:\n{contract_profile}\n\nBegin attack surface mapping. Output as JSON in ```json``` blocks."
-        ),
+        ell.user("Begin drain surface enumeration."),
     ]
 
 
 @ell.simple(model=MODEL, client=CLIENT, temperature=0.5)
 def invoke_hypothesis_generation(contract_profile: str, attack_surfaces: str, known_vulns_context: str):
-    """Generate novel vulnerability hypotheses that go beyond known patterns."""
+    """Construct concrete value-extraction sequences from first principles."""
     return [
         ell.system(
-            "You are Axiom, the world's foremost 0-day vulnerability researcher for EVM smart contracts. You have a unique ability: you can reason about emergent vulnerabilities - bugs that arise not from individual code patterns but from the interaction of multiple correct-seeming components. You find the vulnerabilities that every auditor, every tool, and every formal verifier misses. Your hypotheses have led to the discovery of critical vulnerabilities in major DeFi protocols. You think in terms of invariant violations, not pattern matching."
+            "You are a constructive adversary. Given a value map and a list of "
+            "potential drain surfaces for a smart contract, your job is to build "
+            "CONCRETE attack hypotheses — specific transaction sequences where "
+            "an unprivileged caller ends with more value than they started. "
+            "You think from first principles about how value conservation can "
+            "fail. You do not reference named vulnerability classes. You do not "
+            "produce checklists. Every hypothesis is a specific, mechanistic "
+            "story about value flowing from the protocol to the attacker."
         ),
         ell.user(
-            f"""Given the contract decomposition and attack surface mapping below, generate NOVEL vulnerability hypotheses. These must go BEYOND known vulnerability patterns. Do NOT simply list reentrancy, overflow, access control - those are entry-level. Instead, reason about:
+            f"""You have two inputs:
 
-**HYPOTHESIS GENERATION FRAMEWORK**:
+1. A value-lifecycle decomposition of a smart contract
+2. A list of drain surfaces where value conservation may break
 
-1. **INVARIANT VIOLATION REASONING**:
-   - What mathematical invariants MUST hold for this protocol to be secure?
-   - What state invariants MUST hold between function calls?
-   - What economic invariants MUST hold for the tokenomics to be sound?
-   - For each invariant: construct a sequence of transactions that could violate it
-   - Consider: can an invariant be temporarily violated during a transaction and exploited before restoration?
-
-2. **EMERGENT BEHAVIOR ANALYSIS**:
-   - What happens when multiple independent features interact?
-   - Are there state machine transitions that were not intended by the developers?
-   - Can legitimate features be combined in an unintended way?
-   - What emergent behaviors arise from the interaction with external contracts?
-
-3. **ASSUMPTION GRAPH ATTACK**:
-   - List every implicit assumption the code makes
-   - For each assumption: under what conditions could it be violated?
-   - Which assumptions depend on external state that an attacker controls?
-   - Which assumptions are true today but could become false through protocol changes?
-
-4. **TEMPORAL ATTACK VECTORS**:
-   - Multi-block attack sequences (setup in block N, exploit in block N+1)
-   - Time-dependent state drift (what changes between calls?)
-   - Epoch/period boundary exploitation
-   - Deadline/expiry edge cases
-
-5. **COMPOSABILITY EXPLOIT CHAINS**:
-   - Flash loan → price manipulation → this contract → profit extraction
-   - Cross-protocol position manipulation
-   - Governance attack chains (accumulate votes → malicious proposal → extraction)
-   - Liquidation cascade triggers through this contract
-
-6. **EVM-LEVEL EXPLOITATION**:
-   - Gas-dependent behavior exploitation
-   - Return data handling edge cases
-   - ABI encoding edge cases with dynamic types
-   - Selector collision exploitation
-   - EVM precompile interaction edge cases
-
-7. **UPGRADE/PROXY EXPLOITATION** (if applicable):
-   - Can a malicious upgrade be crafted that appears benign?
-   - Storage slot overlap between implementation versions
-   - Initialization race conditions post-upgrade
-   - Function selector collision between proxy and implementation
-
-8. **NOVEL CROSS-CUTTING CONCERNS**:
-   - What if this contract is called as part of a larger atomic transaction?
-   - What if the underlying token contract has a callback mechanism?
-   - What if the blockchain undergoes a reorg during a time-sensitive operation?
-   - What if a dependency contract is paused, upgraded, or self-destructed?
-
-**KNOWN VULNERABILITY PATTERNS TO TRANSCEND** (do NOT just list these, go deeper):
+Additionally, here is context about how value has been drained from
+similar contracts in the real world — described purely in terms of
+mechanics, not labels:
 {known_vulns_context}
 
-For each hypothesis, provide:
-- **Title**: Descriptive name for the potential vulnerability
-- **Hypothesis**: Clear statement of what could go wrong
-- **Attack Narrative**: Step-by-step transaction sequence to exploit
-- **Affected Functions**: Specific functions involved
-- **Preconditions**: What must be true for the attack to work
-- **Complexity**: How complex is the attack (Low/Medium/High)
-- **Impact**: What would a successful exploit achieve
-- **Novelty Reasoning**: Why this goes beyond known patterns
-- **Investigation Steps**: How to verify if this hypothesis is correct
-- **Related CWEs**: Closest CWE categories (may not map perfectly)
+Your task: for each drain surface (and for any NEW drain vector you
+identify by combining surfaces), construct a COMPLETE ATTACK HYPOTHESIS.
 
-Generate at least 10 hypotheses, prioritized by impact and feasibility. Focus on hypotheses that represent TRUE 0-day potential - things that no scanner would find and most auditors would miss.
+Each hypothesis must answer ONE question:
+  "How does an unprivileged caller end a transaction sequence holding
+   more value than they started with?"
+
+For each hypothesis provide:
+
+1. **title**: A short description of the value-drain mechanic (not a
+   vulnerability label — describe what happens to the value).
+
+2. **value_flow_break**: Which specific conservation invariant breaks?
+   Write the invariant as a mathematical statement and show how the
+   attack violates it.
+
+3. **attack_sequence**: Numbered steps. Each step is a concrete
+   transaction or operation:
+   - Who calls what function with what arguments
+   - What state changes occur
+   - What external calls fire and what happens during them
+   - What value moves where at each step
+
+4. **initial_state**: What must be true before the attack starts?
+   (e.g. contract holds ≥N tokens, a certain pool exists, etc.)
+
+5. **caller_requirements**: What does the attacker need?
+   (only: capital, deployed contracts, timing — NOT privileges)
+
+6. **net_extraction**: What does the attacker gain and what does the
+   protocol/users lose? Be specific about amounts in terms of the
+   contract's variables.
+
+7. **why_it_works**: A plain-English explanation of WHY the code fails
+   to prevent this. What did the developers assume that is actually
+   false? What state transition did they not foresee?
+
+8. **amplification**: Can this be repeated? Does each iteration
+   amplify the next? What bounds the total extraction?
+
+9. **verification_plan**: Concrete steps to confirm or refute this
+   hypothesis:
+   - Specific Foundry/Hardhat test to write
+   - Exact values to use in the test
+   - What assertion proves the drain
+
+Generate at least 10 hypotheses, ordered by net extraction magnitude.
+Every hypothesis must be mechanistically complete — someone reading it
+should be able to write the exploit code directly.
+
+Output as a JSON array wrapped in ```json``` blocks.
+
+Contract value decomposition:
+{contract_profile}
+
+Drain surfaces:
+{attack_surfaces}
 """
         ),
         ell.user(
-            "I understand the gravity of this task. I will generate truly novel hypotheses by reasoning about emergent behaviors, invariant violations, and attack chains that transcend known patterns. Each hypothesis will be actionable and grounded in the specific contract architecture."
+            "I will construct complete, mechanistic attack sequences — each one "
+            "a precise story of value leaving the protocol and entering the "
+            "attacker's wallet."
         ),
-        ell.user(
-            f"Contract Decomposition:\n{contract_profile}\n\nAttack Surface Mapping:\n{attack_surfaces}\n\nGenerate novel vulnerability hypotheses. Output as JSON array in ```json``` blocks."
-        ),
+        ell.user("Begin hypothesis construction."),
     ]
 
 
@@ -388,131 +367,151 @@ def invoke_discovery_prompt_synthesis(
     hypotheses: str,
     protocol_type: str,
 ):
-    """Synthesize all analysis into structured discovery prompts and investigation guides."""
+    """Synthesize self-contained investigation prompts from the complete analysis."""
     return [
         ell.system(
-            "You are Axiom, a master prompt engineer and smart contract security researcher. Your specialty is creating precise, actionable prompts that guide LLM agents to discover 0-day vulnerabilities in smart contracts. Your prompts have been used to find critical bugs in Aave, Compound, Uniswap, and other major protocols before they were exploited. You understand that the quality of the prompt determines the quality of the vulnerability discovery."
+            "You are a precision instrument builder. Your job is to take a complete "
+            "value-drain analysis of a smart contract and distill it into a set of "
+            "self-contained investigation prompts. Each prompt will be handed to an "
+            "analyst (human or LLM) who has never seen this contract. The prompt must "
+            "contain everything they need to investigate one specific value-drainage "
+            "opportunity — the relevant code, the exact question, the verification "
+            "steps. No labels, no generic checklists. Every prompt is about one "
+            "concrete question: can value be drained through THIS specific mechanism?"
         ),
         ell.user(
-            f"""Based on the complete analysis below, synthesize a comprehensive set of DISCOVERY PROMPTS and INVESTIGATION GUIDES. These will be used by LLM agents and security researchers to systematically hunt for 0-day vulnerabilities in this specific contract and protocol type ({protocol_type}).
+            f"""You are given:
+- A value-lifecycle decomposition
+- A list of drain surfaces
+- A set of attack hypotheses
 
-**REQUIREMENTS FOR EACH DISCOVERY PROMPT**:
+Transform this analysis into SELF-CONTAINED INVESTIGATION PROMPTS.
 
-Each prompt must be:
-- Self-contained (usable without additional context)
-- Specific to THIS contract's architecture and patterns
-- Focused on a particular attack angle or hypothesis
-- Actionable (researcher knows exactly what to investigate)
-- Non-trivial (beyond what automated tools check)
+Each prompt targets ONE value-drainage opportunity and must include:
 
-**PROMPT CATEGORIES TO GENERATE**:
+1. **id**: Unique numeric identifier.
 
-1. **INVARIANT VERIFICATION PROMPTS** (3-5 prompts):
-   Create prompts that guide analysis of specific mathematical and state invariants.
-   Each prompt should:
-   - State the invariant clearly
-   - Provide the relevant code context
-   - Ask for construction of a violating transaction sequence
-   - Include specific edge cases to consider
+2. **title**: What value-flow is under investigation (describe the mechanic,
+   not a vulnerability label).
 
-2. **CROSS-FUNCTION INTERACTION PROMPTS** (3-5 prompts):
-   Create prompts that guide analysis of how functions interact through shared state.
-   Each prompt should:
-   - Identify the specific function pairs/groups to analyze
-   - Describe the shared state variables
-   - Ask for state corruption scenarios
-   - Include the ordering constraints to consider
+3. **system_context**: A system prompt that sets up the investigator's
+   mindset. Always frame it as: "You are investigating whether [specific
+   value-flow mechanic] allows an unprivileged caller to extract net
+   positive value."
 
-3. **ECONOMIC ATTACK PROMPTS** (3-5 prompts):
-   Create prompts focused on economic/DeFi-specific attack vectors.
-   Each prompt should:
-   - Describe the economic mechanism
-   - Provide relevant calculation code
-   - Ask for manipulation scenarios with flash loans
-   - Include specific numerical edge cases
+4. **analysis_prompt**: The full investigation prompt. This must contain:
+   - The relevant source code snippets (inline, not referenced)
+   - The specific value-conservation invariant being tested
+   - The hypothesized break mechanic
+   - Concrete questions to answer (can X happen? what if Y?)
+   - Numerical examples to check
+   - Edge cases to consider
 
-4. **COMPOSABILITY ATTACK PROMPTS** (2-3 prompts):
-   Create prompts for cross-protocol attack chains.
-   Each prompt should:
-   - Describe how this contract fits in the DeFi ecosystem
-   - Identify external dependencies
-   - Ask for multi-protocol attack scenarios
-   - Include specific DeFi primitives to combine
+5. **focus_areas**: 2-4 specific things to look at (described as value-flow
+   mechanics, not vulnerability names).
 
-5. **EVM EDGE CASE PROMPTS** (2-3 prompts):
-   Create prompts for low-level EVM exploitation.
-   Each prompt should:
-   - Identify specific low-level patterns in the code
-   - Provide EVM-level context
-   - Ask for edge case construction
-   - Include gas, memory, and storage considerations
+6. **contract_context**: The exact code snippets relevant to this
+   investigation (extracted from the analysis).
 
-6. **UPGRADE/PROXY PROMPTS** (if applicable, 1-2 prompts):
-   Create prompts for upgrade-related vulnerabilities.
+7. **investigation_guide**: Step-by-step instructions to verify:
+   - What test to write (Foundry/Hardhat)
+   - What initial state to set up
+   - What transaction sequence to execute
+   - What assertion proves/disproves the drain
+   - How to measure the net value extraction
 
-7. **META-INVESTIGATION GUIDE**:
-   A comprehensive roadmap that:
-   - Prioritizes which hypotheses to investigate first
-   - Describes the tools and techniques needed for each
-   - Provides a testing methodology (unit tests, fork tests, formal verification)
-   - Suggests specific Foundry/Hardhat test scenarios to write
-   - Includes invariant test suggestions for fuzzing
-   - Outlines how to chain multiple findings together
+Also produce an **investigation_roadmap** — an ordered list of which
+prompts to investigate first (by expected severity of drain) and how
+findings from one investigation feed into the next.
 
-**FORMAT FOR EACH PROMPT**:
-```
-{{
-  "id": <number>,
-  "category": "<prompt category>",
-  "title": "<descriptive title>",
-  "system_context": "<system prompt to set LLM context>",
-  "analysis_prompt": "<the actual discovery prompt with full contract context embedded>",
-  "focus_areas": ["<specific areas to investigate>"],
-  "contract_context": "<relevant code snippets to include>",
-  "investigation_guide": ["<step-by-step investigation instructions>"]
-}}
-```
+The prompts must work STANDALONE. An analyst receiving one prompt has
+everything needed to conduct a complete investigation of that specific
+value-drainage vector.
 
-The prompts should be usable DIRECTLY - an LLM receiving one of these prompts should be able to conduct meaningful vulnerability analysis without any additional context.
+Output as JSON with two keys:
+  "discovery_prompts": [array of prompt objects]
+  "investigation_roadmap": [array of ordered steps with rationale]
+
+Wrap in ```json``` blocks.
+
+Value decomposition:
+{contract_profile}
+
+Drain surfaces:
+{attack_surfaces}
+
+Attack hypotheses:
+{hypotheses}
 """
         ),
         ell.user(
-            "I will synthesize everything into prompts of the highest quality - each one a precision instrument for 0-day discovery. Every prompt will be self-contained, specific, and designed to reveal vulnerabilities that resist discovery through conventional methods."
+            "I will produce precision investigation instruments — each one a "
+            "complete, self-contained probe into a specific value-drainage path."
         ),
-        ell.user(
-            f"Contract Decomposition:\n{contract_profile}\n\nAttack Surfaces:\n{attack_surfaces}\n\nVulnerability Hypotheses:\n{hypotheses}\n\nGenerate the complete set of discovery prompts and the meta-investigation guide. Output as JSON with two top-level keys: 'discovery_prompts' (array) and 'investigation_roadmap' (array of steps). Wrap in ```json``` blocks."
-        ),
+        ell.user("Begin prompt synthesis."),
     ]
 
 
 @ell.simple(model=MODEL, client=CLIENT, temperature=0.3)
 def invoke_known_vulns_synthesis(dataset_context: str, protocol_type: str):
-    """Synthesize known vulnerability patterns relevant to the target protocol type from the dataset."""
+    """Extract value-drainage mechanics from historical findings."""
     return [
         ell.system(
-            "You are Axiom, an AI expert in smart contract vulnerability taxonomy. You have deep knowledge of all known vulnerability patterns in EVM smart contracts and understand which patterns are most relevant to specific protocol types."
+            "You are a historian of value drainage in smart contracts. You study "
+            "past exploits and audit findings NOT to build checklists, but to "
+            "understand the fundamental MECHANICS of how value conservation was "
+            "broken. You describe each case purely in terms of what value moved "
+            "where and why the code failed to prevent it. No vulnerability labels. "
+            "No categories. Just mechanics."
         ),
         ell.user(
-            f"""Given the following vulnerability data from real-world audit reports and the target protocol type '{protocol_type}', synthesize a comprehensive summary of:
+            f"""Below is data from real-world audit reports and exploits.
 
-1. The most common vulnerability patterns found in {protocol_type} protocols
-2. The most CRITICAL (high-impact) vulnerabilities specific to {protocol_type}
-3. Known attack vectors that are unique to {protocol_type} architecture
-4. Vulnerability patterns that auditors frequently miss in {protocol_type}
-5. Recent (2023-2025) novel exploits against {protocol_type} protocols in the wild
+Extract the VALUE-DRAINAGE MECHANICS — not a list of vulnerability types,
+but a set of mechanical descriptions of how value left the protocol and
+entered an attacker's control.
 
-This summary will be used as context for generating NOVEL hypotheses - the goal is to understand what is ALREADY KNOWN so we can reason about what is NOT YET KNOWN.
+For each mechanic you identify, describe:
+
+1. **What value moved**: tokens, ETH, shares, debt, collateral — what
+   specific economic value was extracted?
+
+2. **How the code's model diverged from reality**: Every drain happens
+   because the code believes something that is not true. What was the
+   false belief? (e.g. "the code believed the balance had not changed
+   since the last checkpoint" or "the code assumed the price feed
+   reflected the true market price at the time of settlement")
+
+3. **What the attacker controlled**: What input, timing, or external
+   state did the attacker manipulate to make the false belief exploitable?
+
+4. **The extraction sequence**: In mechanical terms, what happened?
+   (e.g. "Caller deposited, triggered a callback during which they
+   withdrew, then the original deposit completed against a stale
+   balance record")
+
+5. **Why the gate failed**: What check or condition was supposed to
+   prevent this, and why did it not work?
+
+Organize by MECHANIC, not by label. Group cases where the same
+fundamental conservation break occurred even if they have different
+traditional names.
+
+This output will be used to reason about NEW mechanics that have NOT
+been seen before. The goal is to build intuition about HOW value
+conservation breaks, so we can predict where it will break next.
 
 Dataset context:
 {dataset_context}
 
-Output a structured summary as plain text, organized by category. Be thorough but concise. Focus on the patterns most relevant to {protocol_type}.
+Target protocol context: {protocol_type}
+
+Output as structured plain text organized by drainage mechanic.
 """
         ),
         ell.user(
-            "I will synthesize the known vulnerability landscape for this protocol type, providing the foundation needed to reason beyond known patterns."
+            "I will extract the mechanics of value drainage — the physics of "
+            "how money escapes smart contracts — not a taxonomy of labels."
         ),
-        ell.user(
-            f"Begin synthesis for protocol type: {protocol_type}"
-        ),
+        ell.user("Begin mechanical analysis."),
     ]
